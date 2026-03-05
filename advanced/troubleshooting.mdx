@@ -1,0 +1,610 @@
+---
+title: Troubleshooting
+description: Common issues, debugging techniques, and error message reference
+---
+
+This guide helps you diagnose and resolve common issues with the Sentry CLI.
+
+## Common Issues
+
+### Authentication Problems
+
+<Accordion title="Error: Not authenticated. Run 'sentry auth login' first.">
+
+**Cause**: The CLI cannot find a valid authentication token.
+
+**Solutions**:
+
+1. **Log in with OAuth**:
+   ```bash
+   sentry auth login
+   ```
+
+2. **Use an environment variable**:
+   ```bash
+   export SENTRY_AUTH_TOKEN=your_token_here
+   sentry auth status
+   ```
+
+3. **Use a token file** (for CI/CD):
+   ```bash
+   echo "your_token_here" > ~/.sentry-token
+   export SENTRY_AUTH_TOKEN=$(cat ~/.sentry-token)
+   ```
+
+**Note**: `SENTRY_AUTH_TOKEN` takes precedence over `SENTRY_TOKEN` and stored OAuth tokens.
+
+</Accordion>
+
+<Accordion title="Error: Authentication expired. Run 'sentry auth login' to re-authenticate.">
+
+**Cause**: Your OAuth token has expired and cannot be refreshed.
+
+**Solutions**:
+
+1. **Re-authenticate**:
+   ```bash
+   sentry auth login
+   ```
+
+2. **Check token expiration**:
+   ```bash
+   sqlite3 ~/.config/sentry-cli/config.db \
+     "SELECT datetime(expires_at/1000, 'unixepoch') AS expires FROM auth WHERE id = 1;"
+   ```
+
+3. **Use a non-expiring token** (for automation):
+   - Go to Sentry → Settings → Account → Auth Tokens
+   - Create a new auth token
+   - Set `SENTRY_AUTH_TOKEN` environment variable
+
+</Accordion>
+
+<Accordion title="Error: Session expired and no refresh token available.">
+
+**Cause**: The stored OAuth token expired and there's no refresh token to renew it.
+
+**Solution**: Re-authenticate using the login command:
+```bash
+sentry auth login
+```
+
+This error typically happens if:
+- You manually edited the database
+- The OAuth flow was interrupted
+- The token was created before refresh token support was added
+
+</Accordion>
+
+### Context Resolution
+
+<Accordion title="Error: Organization is required.">
+
+**Cause**: The CLI cannot determine which organization to use.
+
+**Solutions**:
+
+1. **Specify explicitly**:
+   ```bash
+   sentry issue list my-org
+   ```
+
+2. **Set default organization**:
+   ```bash
+   export SENTRY_ORG=my-org
+   ```
+
+3. **Use DSN detection**:
+   - Add a Sentry DSN to `.env` in your project:
+     ```
+     SENTRY_DSN=https://abc123@o123456.ingest.us.sentry.io/7890123
+     ```
+   - Or add it to your code (JavaScript example):
+     ```javascript
+     Sentry.init({
+       dsn: "https://abc123@o123456.ingest.us.sentry.io/7890123",
+     });
+     ```
+
+4. **Store a default**:
+   ```bash
+   sentry defaults set my-org
+   ```
+
+</Accordion>
+
+<Accordion title="Error: Organization and project are required.">
+
+**Cause**: The CLI needs both org and project context but cannot determine them.
+
+**Solutions**:
+
+1. **Specify explicitly**:
+   ```bash
+   sentry issue list my-org/my-project
+   ```
+
+2. **Set environment variables**:
+   ```bash
+   export SENTRY_ORG=my-org
+   export SENTRY_PROJECT=my-project
+   ```
+
+3. **Use DSN detection** (see above)
+
+4. **Store defaults**:
+   ```bash
+   sentry defaults set my-org/my-project
+   ```
+
+</Accordion>
+
+### Database Errors
+
+<Accordion title="Error: attempt to write a readonly database">
+
+**Cause**: The CLI cannot write to its SQLite database due to permission issues.
+
+**Solutions**:
+
+1. **Check file permissions**:
+   ```bash
+   ls -la ~/.config/sentry-cli/
+   chmod 700 ~/.config/sentry-cli/
+   chmod 600 ~/.config/sentry-cli/config.db
+   ```
+
+2. **Check directory permissions**:
+   ```bash
+   # Ensure the parent directory is writable
+   ls -la ~/.config/
+   ```
+
+3. **Check if filesystem is read-only**:
+   ```bash
+   mount | grep "$(df ~/.config/sentry-cli | tail -1 | awk '{print $1}')"
+   ```
+
+4. **Use a custom config directory**:
+   ```bash
+   export SENTRY_CONFIG_DIR=~/custom-sentry-config
+   mkdir -p ~/custom-sentry-config
+   ```
+
+</Accordion>
+
+<Accordion title="Error: no such table: [table_name]">
+
+**Cause**: The database schema is corrupted or incomplete.
+
+**Solutions**:
+
+1. **Let auto-repair fix it** (default behavior):
+   - The CLI automatically detects and repairs schema issues
+   - Check the logs for "Auto-repaired database" messages
+
+2. **Manual repair**:
+   ```bash
+   sentry cli fix
+   ```
+
+3. **Reset the database** (last resort):
+   ```bash
+   rm ~/.config/sentry-cli/config.db
+   # The CLI will recreate it on next run
+   ```
+
+**Note**: Auto-repair can be disabled with `SENTRY_CLI_NO_AUTO_REPAIR=1` (not recommended).
+
+</Accordion>
+
+<Accordion title="Error: no such column: [column_name]">
+
+**Cause**: The database schema is outdated (usually after downgrading the CLI).
+
+**Solutions**:
+
+1. **Upgrade to the latest CLI version**:
+   ```bash
+   sentry upgrade
+   ```
+
+2. **Let auto-repair add the column** (automatic in most cases)
+
+3. **Reset the database**:
+   ```bash
+   rm ~/.config/sentry-cli/config.db
+   ```
+
+</Accordion>
+
+### API Errors
+
+<Accordion title="Error: Request failed with status 401">
+
+**Cause**: Authentication failed (invalid or expired token).
+
+**Solutions**:
+
+1. **Check token validity**:
+   ```bash
+   sentry auth status
+   ```
+
+2. **Re-authenticate**:
+   ```bash
+   sentry auth login
+   ```
+
+3. **Verify token permissions** (for auth tokens):
+   - Go to Sentry → Settings → Auth Tokens
+   - Ensure the token has the required scopes
+   - Check if the token is enabled and not expired
+
+</Accordion>
+
+<Accordion title="Error: Request failed with status 403">
+
+**Cause**: You don't have permission to access the requested resource.
+
+**Solutions**:
+
+1. **Check organization/project access**:
+   - Verify you're a member of the organization
+   - Check your role (some commands require admin/owner)
+
+2. **Verify auth token scopes**:
+   - Org auth tokens may have limited scopes
+   - Use a user auth token or re-create the org token with broader scopes
+
+3. **Check if the resource exists**:
+   ```bash
+   sentry org view my-org
+   sentry project view my-org/my-project
+   ```
+
+</Accordion>
+
+<Accordion title="Error: Request failed with status 404">
+
+**Cause**: The requested resource (org, project, issue, etc.) doesn't exist or you don't have access.
+
+**Solutions**:
+
+1. **Verify the resource exists**:
+   ```bash
+   # List organizations
+   sentry org list
+   
+   # List projects
+   sentry project list my-org
+   
+   # Check issue ID format
+   sentry issue view SENTRY-123
+   ```
+
+2. **Check spelling**:
+   - Slugs are case-sensitive
+   - Use the exact slug from the Sentry web UI
+
+3. **Verify you have access**:
+   - You may not be a member of the organization
+   - The project may be in a different organization
+
+</Accordion>
+
+### Self-Hosted Sentry
+
+<Accordion title="Error: OAuth requires SENTRY_CLIENT_ID for self-hosted instances">
+
+**Cause**: OAuth device flow requires a client ID for self-hosted Sentry (version 26.1.0+).
+
+**Solution**:
+
+1. **Create an OAuth application**:
+   - Go to your Sentry instance → Settings → Developer Settings
+   - Click "Create New Application"
+   - Select "Public" application type
+   - Copy the client ID
+
+2. **Set the environment variables**:
+   ```bash
+   export SENTRY_URL=https://sentry.example.com
+   export SENTRY_CLIENT_ID=your-oauth-client-id
+   ```
+
+3. **Log in**:
+   ```bash
+   sentry auth login
+   ```
+
+**Alternative** (for older Sentry versions):
+```bash
+sentry auth login --token
+```
+
+</Accordion>
+
+## Debugging Techniques
+
+### Enable Debug Logging
+
+Get detailed information about what the CLI is doing:
+
+```bash
+# Using environment variable
+export SENTRY_LOG_LEVEL=debug
+sentry issue list
+
+# Using flag
+sentry --log-level debug issue list
+
+# Using --verbose (equivalent to debug level)
+sentry --verbose issue list
+```
+
+Log levels:
+- `error`: Only errors
+- `warn`: Errors and warnings  
+- `info`: Normal output (default)
+- `debug`: Detailed debugging information
+- `trace`: Very verbose (includes HTTP requests/responses)
+
+### Inspect the Database
+
+Query the SQLite database directly:
+
+```bash
+sqlite3 ~/.config/sentry-cli/config.db
+```
+
+```sql
+-- Check authentication status
+SELECT 
+  token IS NOT NULL AS has_token,
+  refresh_token IS NOT NULL AS has_refresh_token,
+  datetime(expires_at/1000, 'unixepoch') AS expires,
+  datetime(updated_at/1000, 'unixepoch') AS updated
+FROM auth WHERE id = 1;
+
+-- View defaults
+SELECT organization, project 
+FROM defaults WHERE id = 1;
+
+-- Check schema version
+SELECT version FROM schema_version;
+
+-- List all tables
+.tables
+
+-- View table schema
+.schema project_cache
+```
+
+### Test DSN Detection
+
+Check if the CLI can detect your project's DSN:
+
+```bash
+# From your project directory
+sentry auth status
+# Look for "Detected from: .env" or "Detected from: src/index.js"
+
+# Force DSN detection
+unset SENTRY_ORG
+unset SENTRY_PROJECT
+sentry issue list
+```
+
+### Check Network Connectivity
+
+Verify you can reach the Sentry API:
+
+```bash
+# SaaS
+curl -I https://sentry.io/api/
+
+# Self-hosted
+curl -I https://your-sentry-instance.com/api/
+```
+
+### Verify Token Format
+
+Sentry auth tokens have specific formats:
+
+- **User auth tokens**: Start with `sntryu_`
+- **Org auth tokens**: Start with `sntrys_`
+- **OAuth access tokens**: Random alphanumeric (40+ characters)
+
+```bash
+# Check token format
+echo $SENTRY_AUTH_TOKEN | cut -c1-7
+# Should show "sntryu_" or "sntrys_"
+```
+
+## Error Message Reference
+
+### CliError
+
+Base class for all CLI errors. Generic format:
+```
+Error: [message]
+```
+
+### ApiError
+
+API request failures. Format:
+```
+Error: [summary]
+  [detailed message from API]
+```
+
+**Common Status Codes**:
+- `400`: Bad request (invalid parameters)
+- `401`: Unauthorized (authentication failed)
+- `403`: Forbidden (insufficient permissions)
+- `404`: Not found
+- `429`: Rate limited
+- `500`: Internal server error
+
+### AuthError
+
+Authentication failures. Reasons:
+- `not_authenticated`: No valid token found
+- `expired`: Token has expired
+- `invalid`: Token is malformed or rejected
+
+### ConfigError
+
+Configuration issues. Format:
+```
+Error: [message]
+
+Suggestion: [helpful hint]
+```
+
+### ContextError
+
+Missing required context (org/project). Format:
+```
+[Resource] is required.
+
+Specify it using:
+  [command example]
+
+Or:
+  - [alternative 1]
+  - [alternative 2]
+```
+
+### ResolutionError
+
+Failed to resolve a resource. Format:
+```
+[Resource] [headline].
+
+Try:
+  [primary hint]
+
+Or:
+  - [suggestion 1]
+  - [suggestion 2]
+```
+
+### ValidationError
+
+Invalid input. Format:
+```
+Error: [validation message]
+```
+
+### DeviceFlowError
+
+OAuth device flow failures. Common codes:
+- `authorization_pending`: User hasn't authorized yet
+- `slow_down`: Polling too fast
+- `expired_token`: Device code expired
+- `access_denied`: User denied authorization
+
+### SeerError
+
+Seer AI feature errors. Reasons:
+- `not_enabled`: Seer not enabled for the organization
+- `no_budget`: Requires a paid plan
+- `ai_disabled`: AI features disabled in organization settings
+
+Format includes actionable URLs:
+```
+[message]
+
+[direct link to relevant settings]
+```
+
+### UpgradeError
+
+CLI upgrade failures. Reasons:
+- `unknown_method`: Cannot detect installation method
+- `unsupported_operation`: Operation not supported for this install method
+- `network_error`: Failed to fetch version info
+- `execution_failed`: Upgrade command failed
+- `version_not_found`: Specified version doesn't exist
+
+## Performance Issues
+
+<Accordion title="Slow command execution">
+
+**Possible Causes**:
+- Network latency to Sentry API
+- Large result sets (e.g., listing thousands of issues)
+- Slow DSN detection (scanning many files)
+
+**Solutions**:
+
+1. **Use pagination**:
+   ```bash
+   sentry issue list --limit 25  # Reduce result set
+   ```
+
+2. **Skip DSN detection**:
+   ```bash
+   export SENTRY_ORG=my-org
+   export SENTRY_PROJECT=my-project
+   ```
+
+3. **Use regional endpoints** (automatic for SaaS):
+   - The CLI automatically detects and uses regional APIs
+   - Check `org_regions` table for cached regions
+
+4. **Check network latency**:
+   ```bash
+   time curl -I https://sentry.io/api/
+   ```
+
+</Accordion>
+
+<Accordion title="High memory usage">
+
+**Possible Causes**:
+- Large API responses
+- Caching many projects
+
+**Solutions**:
+
+1. **Clear caches**:
+   ```bash
+   sqlite3 ~/.config/sentry-cli/config.db \
+     "DELETE FROM project_cache; DELETE FROM dsn_cache;"
+   ```
+
+2. **Use streaming mode** (for large result sets):
+   ```bash
+   sentry issue list --json | jq -c '.[]'
+   ```
+
+</Accordion>
+
+## Getting Help
+
+If you're still experiencing issues:
+
+1. **Check the documentation**:
+   - [Configuration File](./configuration-file)
+   - [Environment Variables](./environment-variables)
+   - [Command Reference](/commands)
+
+2. **Enable debug logging**:
+   ```bash
+   sentry --log-level debug [command]
+   ```
+
+3. **Report a bug**:
+   - GitHub Issues: [github.com/getsentry/sentry-cli](https://github.com/getsentry/sentry-cli)
+   - Include:
+     - CLI version (`sentry --version`)
+     - Operating system
+     - Error message and full command
+     - Debug logs (with sensitive data redacted)
+
+4. **Get community support**:
+   - Sentry Discord: [discord.gg/sentry](https://discord.gg/sentry)
+   - Sentry Forum: [forum.sentry.io](https://forum.sentry.io)

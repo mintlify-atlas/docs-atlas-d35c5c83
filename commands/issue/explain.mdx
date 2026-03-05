@@ -1,0 +1,200 @@
+---
+title: sentry issue explain
+description: Get AI-powered root cause analysis for a Sentry issue using Seer AI
+---
+
+# sentry issue explain
+
+Get a root cause analysis for a Sentry issue using Seer AI. This command analyzes the issue and provides identified root causes, reproduction steps, and relevant code locations.
+
+## Usage
+
+```bash
+sentry issue explain <issue-id>
+```
+
+## Issue ID Formats
+
+The `explain` command accepts the same issue identifier formats as `view`:
+
+```bash
+# Explicit org + ID
+sentry issue explain sentry/EXTENSION-7
+
+# Project + suffix  
+sentry issue explain cli-G
+
+# Short ID (searches across orgs)
+sentry issue explain CLI-G
+
+# Suffix only (requires DSN context)
+sentry issue explain G
+
+# Numeric ID
+sentry issue explain 123456789
+```
+
+## Parameters
+
+<ParamField path="issue-id" type="string" required>
+  Issue identifier in any supported format.
+</ParamField>
+
+## Flags
+
+<ParamField path="--force" type="boolean" default="false">
+  Force a fresh analysis even if one already exists. Useful when issue context has changed.
+  
+  **Example:**
+  ```bash
+  sentry issue explain 123456789 --force
+  ```
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Output results as JSON array of root causes.
+  
+  **Example:**
+  ```bash
+  sentry issue explain EXTENSION-7 --json
+  ```
+</ParamField>
+
+## Examples
+
+### Basic Usage
+
+```bash
+# Analyze issue by numeric ID
+sentry issue explain 123456789
+
+# Analyze by short ID
+sentry issue explain EXTENSION-7
+
+# With explicit org
+sentry issue explain sentry/CLI-G
+```
+
+### Force Re-analysis
+
+```bash
+# Trigger fresh analysis
+sentry issue explain 123456789 --force
+```
+
+### JSON Output
+
+```bash
+# Export to JSON
+sentry issue explain EXTENSION-7 --json > root-causes.json
+
+# Process with jq
+sentry issue explain CLI-G --json | jq '.[0].description'
+```
+
+## Sample Output
+
+### Human-Readable Format
+
+```
+Analyzing issue... (this may take a few minutes)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Root Cause Analysis
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Root Cause #0:
+
+The error occurs because the `processData` function attempts to call `.map()` 
+on a variable that is undefined. This happens when the API response does not 
+include the expected `users` array in the payload.
+
+Reproduction Steps:
+  1. Navigate to /dashboard in the application
+  2. Ensure the external API endpoint returns a response without the 'users' field
+  3. The application attempts to render the user list
+  4. TypeError is thrown when calling users.map()
+
+Relevant Code:
+  File: src/components/UserList.js
+  Line: 42
+  Code: const userElements = users.map(user => renderUser(user));
+
+Tip: To create a plan, run: sentry issue plan 123456789
+```
+
+### JSON Format
+
+```json
+[
+  {
+    "id": 0,
+    "title": "Undefined variable access in processData",
+    "description": "The error occurs because the `processData` function attempts to call `.map()` on a variable that is undefined. This happens when the API response does not include the expected `users` array in the payload.",
+    "reproduction": [
+      "Navigate to /dashboard in the application",
+      "Ensure the external API endpoint returns a response without the 'users' field",
+      "The application attempts to render the user list",
+      "TypeError is thrown when calling users.map()"
+    ],
+    "code_context": {
+      "file": "src/components/UserList.js",
+      "line": 42,
+      "snippet": "const userElements = users.map(user => renderUser(user));"
+    }
+  }
+]
+```
+
+## How It Works
+
+1. **Trigger Analysis**: The command sends the issue to Seer AI for analysis
+2. **Poll Status**: The CLI polls the analysis status every few seconds
+3. **Extract Root Causes**: Once complete, root causes are extracted from the analysis steps
+4. **Display Results**: Formatted output shows the identified causes with context
+
+The analysis may take several minutes for complex issues. Progress is shown via a spinner (hidden in `--json` mode).
+
+## Requirements
+
+<Warning>
+**Seer AI must be enabled for your organization.** If Seer is not available, you'll see an error with a link to enable it in your organization settings.
+</Warning>
+
+### Prerequisites
+
+- Seer AI enabled in organization settings
+- Available Seer AI budget/quota
+- Organization has AI features enabled
+
+### Common Errors
+
+**Seer not enabled:**
+```
+Seer AI is not enabled for this organization.
+Enable it at: https://sentry.io/settings/your-org/processing/ai-tools/
+```
+
+**No budget:**
+```
+Seer AI analysis quota exceeded. Check usage at:
+https://sentry.io/settings/your-org/processing/ai-tools/
+```
+
+**AI disabled in settings:**
+```
+AI features are disabled for this organization.
+```
+
+## Notes
+
+- The first analysis of an issue takes longer as Seer examines code context, stack traces, and event patterns.
+- Subsequent runs reuse cached analysis unless `--force` is specified.
+- If multiple root causes are found, each is numbered (0, 1, 2, ...) for reference in `sentry issue plan --cause N`.
+- Organization context is required to access Seer AI. The command automatically resolves org from the issue ID.
+
+## See Also
+
+- [sentry issue plan](/commands/issue/plan) - Generate a solution plan from root causes
+- [sentry issue view](/commands/issue/view) - View issue details
+- [sentry issue list](/commands/issue/list) - List issues from projects
+- [AI Debugging Guide](/guides/ai-debugging) - Complete guide to using Seer AI

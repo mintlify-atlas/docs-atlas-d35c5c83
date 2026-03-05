@@ -1,0 +1,316 @@
+---
+title: "AI-Powered Debugging with Seer"
+description: "Use Seer AI to analyze root causes and generate solution plans for Sentry issues"
+---
+
+Sentry CLI integrates with Seer AI to provide automated root cause analysis and solution planning for issues. The AI analyzes your error data, stack traces, and code context to identify what caused the issue and suggest how to fix it.
+
+## Prerequisites
+
+- GitHub integration configured for your organization
+- Code mappings set up for your project
+- Seer AI enabled in your organization settings
+
+<Note>
+Seer AI is available on Business and Enterprise plans. Visit your organization's **Settings > Seer** to enable it.
+</Note>
+
+## Commands
+
+### Explain: Root Cause Analysis
+
+The `issue explain` command analyzes an issue and identifies the root cause:
+
+```bash
+sentry issue explain 123456789
+```
+
+The analysis provides:
+- Identified root causes
+- Reproduction steps
+- Relevant code locations
+
+<Tabs>
+  <Tab title="Human Output">
+    ```bash
+    $ sentry issue explain 123456789
+    ⠋ Analyzing issue...
+    
+    ## Root Cause Analysis Complete
+    
+    ### Cause #0: Null pointer exception in user authentication
+    
+    **Repository:** my-org/my-app
+    
+    **Reproduction steps:**
+    
+    **Authentication flow when email is missing**
+    
+    The code attempts to access the email property without checking
+    if the user object exists:
+    
+    ```python
+    def authenticate_user(user):
+        return user.email.lower()  # user could be None
+    ```
+    
+    To create a plan, run: sentry issue plan 123456789
+    ```
+  </Tab>
+  <Tab title="JSON Output">
+    ```bash
+    $ sentry issue explain 123456789 --json
+    ```
+    
+    ```json
+    [
+      {
+        "description": "Null pointer exception in user authentication",
+        "relevant_repos": ["my-org/my-app"],
+        "root_cause_reproduction": [
+          {
+            "title": "Authentication flow when email is missing",
+            "code_snippet_and_analysis": "The code attempts to access the email property without checking if the user object exists:\n\n```python\ndef authenticate_user(user):\n    return user.email.lower()  # user could be None\n```"
+          }
+        ]
+      }
+    ]
+    ```
+  </Tab>
+</Tabs>
+
+#### Issue ID Formats
+
+You can reference issues in multiple ways:
+
+```bash
+# Numeric ID
+sentry issue explain 123456789
+
+# Organization/short ID
+sentry issue explain sentry/EXTENSION-7
+
+# Project + suffix
+sentry issue explain cli-G
+
+# Short ID (searches across orgs)
+sentry issue explain CLI-G
+```
+
+#### Force Fresh Analysis
+
+Use `--force` to trigger a new analysis even if one exists:
+
+```bash
+sentry issue explain 123456789 --force
+```
+
+### Plan: Solution Generation
+
+The `issue plan` command generates a solution plan with implementation steps:
+
+```bash
+sentry issue plan 123456789 --cause 0
+```
+
+<Info>
+The plan command automatically runs root cause analysis if needed, so you don't need to run `explain` first.
+</Info>
+
+<Tabs>
+  <Tab title="Human Output">
+    ```bash
+    $ sentry issue plan 123456789 --cause 0
+    Creating plan for cause #0...
+    "Null pointer exception in user authentication"
+    
+    ⠋ Generating solution...
+    
+    ## Solution
+    
+    **Summary:** Add null check before accessing user.email property
+    
+    ### Steps to implement
+    
+    1. **Add user validation in authenticate_user**
+    
+       Update the authenticate_user function to check if user is None
+       before accessing the email property. Return a default value or
+       raise an appropriate exception.
+    
+    2. **Add unit tests for null user case**
+    
+       Create test cases to verify the function handles None users
+       correctly without throwing unhandled exceptions.
+    
+    3. **Update caller code to handle exceptions**
+    
+       Ensure all callers of authenticate_user are prepared to handle
+       the authentication failure cases appropriately.
+    ```
+  </Tab>
+  <Tab title="JSON Output">
+    ```bash
+    $ sentry issue plan 123456789 --cause 0 --json
+    ```
+    
+    ```json
+    {
+      "run_id": "autofix-abc123",
+      "status": "COMPLETED",
+      "solution": {
+        "one_line_summary": "Add null check before accessing user.email property",
+        "steps": [
+          {
+            "title": "Add user validation in authenticate_user",
+            "description": "Update the authenticate_user function to check if user is None before accessing the email property. Return a default value or raise an appropriate exception."
+          },
+          {
+            "title": "Add unit tests for null user case",
+            "description": "Create test cases to verify the function handles None users correctly without throwing unhandled exceptions."
+          },
+          {
+            "title": "Update caller code to handle exceptions",
+            "description": "Ensure all callers of authenticate_user are prepared to handle the authentication failure cases appropriately."
+          }
+        ]
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+#### Selecting a Root Cause
+
+If multiple root causes are identified, you must specify which one to plan for:
+
+```bash
+# If you try without --cause when multiple exist:
+$ sentry issue plan 123456789
+Error: Multiple root causes found. Please specify one with --cause <id>:
+
+  0: Null pointer exception in user authentication...
+  1: Missing rate limiting on authentication endpoint...
+
+Example: sentry issue plan 123456789 --cause 0
+```
+
+Then specify the cause ID:
+
+```bash
+sentry issue plan 123456789 --cause 0
+```
+
+#### Regenerate a Plan
+
+Use `--force` to create a new plan even if one exists:
+
+```bash
+sentry issue plan 123456789 --cause 0 --force
+```
+
+## Scripting with JSON Output
+
+Both commands support `--json` for automation:
+
+<CodeGroup>
+```bash Extract root causes
+#!/bin/bash
+ISSUE_ID="123456789"
+ROOT_CAUSES=$(sentry issue explain "$ISSUE_ID" --json)
+COUNT=$(echo "$ROOT_CAUSES" | jq 'length')
+echo "Found $COUNT root causes"
+```
+
+```python Generate plans for all causes
+import json
+import subprocess
+
+issue_id = "123456789"
+
+# Get root causes
+result = subprocess.run(
+    ["sentry", "issue", "explain", issue_id, "--json"],
+    capture_output=True,
+    text=True
+)
+causes = json.loads(result.stdout)
+
+# Generate plan for each cause
+for i, cause in enumerate(causes):
+    print(f"Planning for cause {i}: {cause['description']}")
+    plan_result = subprocess.run(
+        ["sentry", "issue", "plan", issue_id, "--cause", str(i), "--json"],
+        capture_output=True,
+        text=True
+    )
+    plan = json.loads(plan_result.stdout)
+    print(f"Solution: {plan['solution']['one_line_summary']}")
+```
+
+```javascript Node.js integration
+const { execSync } = require('child_process');
+
+const issueId = '123456789';
+
+// Get explanation
+const explainOutput = execSync(
+  `sentry issue explain ${issueId} --json`,
+  { encoding: 'utf-8' }
+);
+const causes = JSON.parse(explainOutput);
+
+// Get plan for first cause
+if (causes.length > 0) {
+  const planOutput = execSync(
+    `sentry issue plan ${issueId} --cause 0 --json`,
+    { encoding: 'utf-8' }
+  );
+  const plan = JSON.parse(planOutput);
+  console.log('Solution:', plan.solution.one_line_summary);
+}
+```
+</CodeGroup>
+
+## Troubleshooting
+
+### Seer Not Enabled
+
+If you see an error about Seer not being enabled:
+
+```bash
+Error: Seer is not enabled for this organization.
+Enable it at: https://sentry.io/settings/your-org/seer/
+```
+
+Visit your organization settings to enable Seer AI.
+
+### No Budget Remaining
+
+```bash
+Error: Your organization has exceeded its Seer budget for this billing period.
+```
+
+Contact your billing admin or wait for the next billing cycle.
+
+### GitHub Integration Required
+
+```bash
+Error: GitHub integration must be configured for your organization.
+```
+
+Seer requires GitHub integration and code mappings to analyze your code:
+
+1. Install the GitHub integration in **Settings > Integrations**
+2. Configure code mappings in your project settings
+3. Try the command again
+
+### Analysis Takes Too Long
+
+The first analysis may take several minutes. Progress is shown with a spinner:
+
+```bash
+⠋ Analyzing issue...
+```
+
+If it times out, try again - subsequent analyses use cached results and complete faster.

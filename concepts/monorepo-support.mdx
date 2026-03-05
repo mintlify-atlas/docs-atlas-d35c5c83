@@ -1,0 +1,528 @@
+---
+title: Monorepo Support
+description: How Sentry CLI handles monorepos with multiple projects, alias generation, and package path tracking
+---
+
+Sentry CLI is designed to work seamlessly with monorepo structures where multiple projects/apps share a single repository. The CLI can detect all DSNs, resolve them to their respective Sentry projects, and generate short aliases for easy identification.
+
+## Multi-DSN Detection
+
+The CLI scans the entire project tree to find all DSNs:
+
+```
+my-monorepo/
+├── apps/
+│   ├── frontend/
+│   │   ├── src/index.ts  (DSN 1: Frontend project)
+│   │   └── .env.local
+│   └── backend/
+│       ├── main.py       (DSN 2: Backend project)  
+│       └── .env
+├── packages/
+│   └── mobile/
+│       └── .env          (DSN 3: Mobile project)
+└── .env                  (DSN 4: Shared/monorepo root)
+```
+
+### Detection Algorithm
+
+The `detectAllDsns()` function finds all DSNs in priority order:
+
+```typescript
+// From src/lib/dsn/detector.ts
+export async function detectAllDsns(
+  cwd: string
+): Promise<DsnDetectionResult> {
+  const allDsns: DetectedDsn[] = [];
+  const seenRawDsns = new Set<string>();
+  
+  // Helper to add DSN if not duplicate
+  const addDsn = (dsn: DetectedDsn) => {
+    if (!seenRawDsns.has(dsn.raw)) {
+      allDsns.push(dsn);
+      seenRawDsns.add(dsn.raw);
+    }
+  };
+  
+  // 1. Scan all code files (highest priority)
+  const { dsns: codeDsns } = await scanCodeForDsns(projectRoot);
+  for (const dsn of codeDsns) {
+    addDsn(dsn);
+  }
+  
+  // 2. Scan all .env files (includes monorepo packages)
+  const { dsns: envFileDsns } = await detectFromAllEnvFiles(projectRoot);
+  for (const dsn of envFileDsns) {
+    addDsn(dsn);
+  }
+  
+  // 3. Check env var (lowest priority)
+  const envDsn = detectFromEnv();
+  if (envDsn) {
+    addDsn(envDsn);
+  }
+  
+  return {
+    primary: allDsns[0] ?? null,
+    all: allDsns,
+    hasMultiple: allDsns.length > 1,
+    fingerprint: createDsnFingerprint(allDsns)
+  };
+}
+```
+
+### Package Path Tracking
+
+Each detected DSN includes its location in the monorepo:
+
+```typescript
+type DetectedDsn = {
+  raw: string;
+  publicKey: string;
+  projectId: string;
+  orgId?: string;
+  source: "code" | "env_file" | "env";
+  sourcePath?: string;      // e.g., "apps/frontend/src/index.ts"
+  packagePath?: string;     // e.g., "apps/frontend"
+};
+```
+
+The `packagePath` is inferred from the directory structure:
+
+- `apps/frontend/.env` → `packagePath: "apps/frontend"`
+- `packages/mobile/.env` → `packagePath: "packages/mobile"`
+- `.env` at root → `packagePath: undefined`
+
+## Environment File Scanning
+
+The CLI scans common monorepo directory patterns:
+
+```typescript
+// From src/lib/dsn/env-file.ts
+const MONOREPO_PATTERNS = [
+  "apps/*/",
+  "packages/*/",
+  "libs/*/",
+  "services/*/"
+];
+
+export async function detectFromAllEnvFiles(
+  projectRoot: string
+): Promise<{ dsns: DetectedDsn[]; sourceMtimes: Record<string, number> }> {
+  const dsns: DetectedDsn[] = [];
+  const sourceMtimes: Record<string, number> = {};
+  
+  // Scan root .env files
+  for (const filename of ENV_FILE_PRIORITY) {
+    const envPath = join(projectRoot, filename);
+    const dsn = await detectFromEnvFile(envPath);
+    if (dsn) {
+      dsns.push(dsn);
+      sourceMtimes[filename] = await getFileMtime(envPath);
+    }
+  }
+  
+  // Scan monorepo packages
+  for (const pattern of MONOREPO_PATTERNS) {
+    for await (const pkgDir of scanMonorepoPackages(projectRoot, pattern)) {
+      for (const filename of ENV_FILE_PRIORITY) {
+        const envPath = join(projectRoot, pkgDir, filename);
+        const dsn = await detectFromEnvFile(envPath);
+        if (dsn) {
+          dsn.packagePath = pkgDir;
+          dsns.push(dsn);
+          sourceMtimes[join(pkgDir, filename)] = await getFileMtime(envPath);
+        }
+      }
+    }
+  }
+  
+  return { dsns, sourceMtimes };
+}
+```
+
+## Alias Generation
+
+When multiple projects are detected, the CLI generates short aliases for easy reference:
+
+```bash
+sentry issue list
+
+Projects:
+  [f] acme/frontend      (apps/frontend)
+  [b] acme/backend       (apps/backend)
+  [m] acme/mobile        (packages/mobile)
+```
+
+### Alias Algorithm
+
+Aliases are generated using shortest unique prefixes:
+
+```typescript
+// From src/lib/alias.ts
+export function findShortestUniquePrefixes(
+  strings: string[]
+): Map<string, string> {
+  const result = new Map<string, string>();
+  
+  for (const str of strings) {
+    const lowerStr = str.toLowerCase();
+    let prefixLen = 1;
+    
+    // Find shortest prefix that's unique
+    while (prefixLen <= lowerStr.length) {
+      const prefix = lowerStr.slice(0, prefixLen);
+      const isUnique = strings.every(other => 
+        other === str || !other.toLowerCase().startsWith(prefix)
+      );
+      
+      if (isUnique) {
+        // Extend past trailing word boundaries
+        while ((prefix.endsWith("-") || prefix.endsWith("_")) &&
+               prefixLen < lowerStr.length) {
+          prefixLen += 1;
+          prefix = lowerStr.slice(0, prefixLen);
+        }
+        result.set(str, prefix);
+        break;
+      }
+      prefixLen += 1;
+    }
+  }
+  
+  return result;
+}
+```
+
+### Examples
+
+**Simple prefixes:**
+```typescript
+findShortestUniquePrefixes(["frontend", "functions", "backend"])
+// Map {
+//   "frontend" => "fr",
+//   "functions" => "fu",  
+//   "backend" => "b"
+// }
+```
+
+**Common word prefix stripping:**
+```typescript
+// Input: ["spotlight-electron", "spotlight-website", "spotlight"]
+// Common prefix "spotlight-" is stripped first
+// Result: "e", "w", "spotlight"
+```
+
+### Org-Aware Aliases
+
+When projects span multiple organizations, aliases include org prefixes:
+
+```typescript
+// From src/lib/alias.ts
+export function buildOrgAwareAliases(
+  pairs: OrgProjectPair[]
+): OrgAwareAliasResult {
+  // Group by project slug to find collisions
+  const projectToOrgs = new Map<string, Set<string>>();
+  for (const { org, project } of pairs) {
+    const orgs = projectToOrgs.get(project) ?? new Set();
+    orgs.add(org);
+    projectToOrgs.set(project, orgs);
+  }
+  
+  // Separate unique and colliding slugs
+  const collidingSlugs = new Set<string>();
+  const uniqueSlugs = new Set<string>();
+  for (const [project, orgs] of projectToOrgs) {
+    if (orgs.size > 1) {
+      collidingSlugs.add(project);
+    } else {
+      uniqueSlugs.add(project);
+    }
+  }
+  
+  // Generate aliases
+  const aliasMap = new Map<string, string>();
+  
+  // Unique projects get simple aliases
+  processUniqueSlugs(pairs, uniqueSlugs, aliasMap);
+  
+  // Colliding projects get "org/project" aliases
+  processCollidingSlugs(projectToOrgs, collidingSlugs, aliasMap);
+  
+  return { aliasMap };
+}
+```
+
+**Example with cross-org collisions:**
+```typescript
+buildOrgAwareAliases([
+  { org: "org1", project: "dashboard" },
+  { org: "org2", project: "dashboard" }
+])
+// Map {
+//   "org1/dashboard" => "o1/d",
+//   "org2/dashboard" => "o2/d"
+// }
+```
+
+## Alias Cache
+
+Generated aliases are cached in SQLite keyed by a fingerprint of detected DSNs:
+
+```sql
+CREATE TABLE project_aliases (
+  fingerprint TEXT PRIMARY KEY,
+  aliases TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+```
+
+The fingerprint is a hash of all detected DSNs:
+
+```typescript
+// From src/lib/dsn/parser.ts
+export function createDsnFingerprint(dsns: DetectedDsn[]): string {
+  const sorted = [...dsns]
+    .map(d => d.raw)
+    .sort();
+  return Bun.hash(sorted.join("|")).toString(16);
+}
+```
+
+Cache entries are invalidated when:
+- DSNs are added/removed
+- DSN values change  
+- Source files are modified
+
+## Multi-Project Commands
+
+Commands that support multiple projects process all detected targets:
+
+### Issue List Example
+
+```bash
+cd my-monorepo
+sentry issue list
+```
+
+Output:
+```
+╔═════════════════════════════════════════════════╗
+║ Issues for acme/frontend (apps/frontend)        ║
+╠═════════════════════════════════════════════════╣
+║ [f-1] TypeError: Cannot read property...        ║
+║ [f-2] ReferenceError: x is not defined          ║
+╚═════════════════════════════════════════════════╝
+
+╔═════════════════════════════════════════════════╗
+║ Issues for acme/backend (apps/backend)          ║
+╠═════════════════════════════════════════════════╣  
+║ [b-1] ValueError: invalid literal for int()     ║
+║ [b-2] KeyError: 'user_id'                       ║
+╚═════════════════════════════════════════════════╝
+
+Found 2 projects matching directory "my-monorepo"
+```
+
+### Resolution Logic
+
+```typescript
+// From src/lib/resolve-target.ts
+export async function resolveAllTargets(
+  options: ResolveOptions
+): Promise<ResolvedTargets> {
+  // ... priority resolution ...
+  
+  // Detect all DSNs
+  const detection = await detectAllDsns(cwd);
+  
+  if (detection.all.length === 0) {
+    return { targets: [] };
+  }
+  
+  // Resolve all DSNs in parallel
+  const resolvedTargets = await Promise.all(
+    detection.all.map(dsn => resolveDsnToTarget(dsn))
+  );
+  
+  // Deduplicate by org+project
+  const seen = new Set<string>();
+  const targets = resolvedTargets.filter(t => {
+    if (t === null) return false;
+    const key = `${t.org}:${t.project}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  
+  return {
+    targets,
+    footer: targets.length > 1 
+      ? formatMultipleProjectsFooter(targets)
+      : undefined,
+    detectedDsns: detection.all
+  };
+}
+```
+
+## Prefix Relationships
+
+The alias generator handles "one slug is prefix of another" relationships:
+
+```typescript
+// From src/lib/alias.ts
+function applyPrefixRelationships(
+  slugs: string[],
+  slugToRemainder: Map<string, string>
+): void {
+  for (const slug of slugs) {
+    let longestPrefix = "";
+    
+    // Find longest other slug that this slug starts with
+    for (const other of slugs) {
+      if (other !== slug && 
+          slug.startsWith(`${other}-`) &&
+          other.length > longestPrefix.length) {
+        longestPrefix = other;
+      }
+    }
+    
+    if (longestPrefix) {
+      const suffix = slug.slice(longestPrefix.length + 1);
+      // Only apply if suffix won't collide
+      if (suffix && !slugSet.has(suffix)) {
+        slugToRemainder.set(slug, suffix);
+      }
+    }
+  }
+}
+```
+
+**Example:**
+```typescript
+// Input: ["cli", "cli-website"]
+// Output: {
+//   "cli" => "cli",
+//   "cli-website" => "website"
+// }
+```
+
+<Note>
+Prefix stripping is skipped if it would create a collision with another slug (e.g., won't strip "cli-" if "website" is also a project).
+</Note>
+
+## Common Word Prefix
+
+When multiple projects share a common word prefix, it's stripped for cleaner aliases:
+
+```typescript
+// From src/lib/alias.ts
+export function findCommonWordPrefix(strings: string[]): string {
+  if (strings.length < 2) {
+    return "";
+  }
+  
+  // Extract first "word" (up to and including first boundary)
+  const getFirstWord = (s: string): string | null => {
+    const lower = s.toLowerCase();
+    const boundaryIdx = Math.max(lower.indexOf("-"), lower.indexOf("_"));
+    if (boundaryIdx > 0) {
+      return lower.slice(0, boundaryIdx + 1);
+    }
+    return null;
+  };
+  
+  const firstWords = strings
+    .map(getFirstWord)
+    .filter(Boolean);
+  
+  if (firstWords.length < 2) {
+    return "";
+  }
+  
+  // Check if all strings with boundaries share the same first word  
+  const candidate = firstWords[0];
+  const allMatch = firstWords.every(w => w === candidate);
+  
+  return allMatch ? candidate : "";
+}
+```
+
+**Example:**
+```typescript
+findCommonWordPrefix(["spotlight-electron", "spotlight-website", "spotlight"])
+// Returns: "spotlight-"
+
+// After stripping:
+// ["electron", "website", "spotlight"]
+```
+
+## Multi-Region Support
+
+When projects span multiple Sentry regions, the CLI handles region resolution automatically:
+
+```typescript
+// From src/lib/region.ts
+export async function resolveEffectiveOrg(orgSlug: string): Promise<string> {
+  // Check if org uses a regional endpoint
+  const cachedRegion = await getCachedOrgRegion(orgSlug);
+  if (cachedRegion) {
+    return cachedRegion.effectiveSlug;
+  }
+  
+  // Query region API
+  const region = await fetchOrgRegion(orgSlug);
+  
+  // Cache for future use
+  await setCachedOrgRegion(orgSlug, region);
+  
+  return region.effectiveSlug;
+}
+```
+
+This ensures API calls target the correct regional endpoint (e.g., `us.sentry.io`, `de.sentry.io`).
+
+## Performance Considerations
+
+<Info>
+**Fast path (cached)**: ~5-10ms to load cached aliases
+
+**Slow path (first run)**: ~2-5s to detect all DSNs and generate aliases
+</Info>
+
+The caching strategy ensures that subsequent commands in monorepos are nearly instant, even with dozens of projects.
+
+## Best Practices
+
+1. **Use package-specific .env files** - Place `.env` files in each package directory for accurate detection
+2. **Initialize Sentry in code** - Explicit `Sentry.init()` calls have higher priority than env files
+3. **Consistent naming** - Use consistent project naming conventions to generate intuitive aliases
+4. **Test detection** - Run `sentry config detect` to verify all projects are detected correctly
+
+## Troubleshooting
+
+### Projects Not Detected
+
+If projects aren't detected:
+
+1. Verify DSN is present in source code or `.env` files
+2. Check that directories match monorepo patterns: `apps/*/`, `packages/*/`, etc.
+3. Ensure files aren't in excluded directories (`node_modules/`, `vendor/`, etc.)
+
+### Duplicate Aliases
+
+If aliases collide:
+
+1. The CLI will extend the prefix automatically
+2. For persistent collisions, rename projects to have more distinct prefixes
+3. Check cache with `sentry config show --json` and clear if needed
+
+### Cache Invalidation
+
+To force cache refresh:
+
+```bash
+rm ~/.sentry/config.db
+sentry issue list  # Will re-detect and cache
+```

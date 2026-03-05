@@ -1,0 +1,113 @@
+---
+title: sentry team list
+description: List teams in a Sentry organization
+---
+
+## Usage
+
+```bash
+sentry team list [target]
+```
+
+List teams in an organization, with flexible targeting and cursor pagination.
+
+## Target Specification
+
+```bash
+sentry team list               # auto-detect from DSN or config
+sentry team list <org>/        # list all teams in org (paginated)
+sentry team list <org>/<proj>  # list teams in org (project context)
+sentry team list <org>         # list teams in org
+```
+
+## Flags
+
+<ParamField path="--limit" type="number" default="100">
+  Maximum number of teams to retrieve per page
+  
+  **Alias:** `-n`
+</ParamField>
+
+<ParamField path="--cursor" type="string">
+  Pagination cursor. Use `last` to continue from the last page.
+  
+  Only applicable when using org-scoped listing (e.g., `<org>/`). The cursor is automatically saved between invocations.
+  
+  **Alias:** `-c`
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Output as JSON
+</ParamField>
+
+## Examples
+
+### List teams (auto-detect)
+
+```bash
+sentry team list
+```
+
+### List teams in specific org (paginated)
+
+```bash
+sentry team list my-org/
+```
+
+### List teams with project context
+
+```bash
+sentry team list my-org/my-project
+```
+
+### Continue to next page
+
+```bash
+sentry team list my-org/ -c last
+```
+
+### Show more teams per page
+
+```bash
+sentry team list my-org/ --limit 200
+```
+
+### Output as JSON
+
+```bash
+sentry team list --json
+```
+
+## Output
+
+### Human-readable format
+
+Displays a table with:
+- ORG - Organization slug
+- SLUG - Team slug
+- NAME - Team display name
+- MEMBERS - Number of team members (right-aligned)
+
+### JSON format
+
+Returns an array of team objects, each containing:
+- `slug` - Team slug identifier
+- `name` - Team display name
+- `memberCount` - Number of team members
+- `orgSlug` - Organization slug (when listing across orgs)
+- Additional fields from the Sentry API
+
+## Modes
+
+The command supports different resolution modes:
+
+- **Auto-detect**: Uses DSN from source code or config
+- **Org-all** (`<org>/`): Lists all teams with cursor pagination
+- **Explicit** (`<org>/<project>`): Lists teams for the org (project provides context)
+- **Project search** (`<project>`): Finds project across all orgs, lists teams for that org
+
+## Notes
+
+- Cursor pagination is only available in org-scoped mode (`<org>/`)
+- When using project context, teams are listed for the project's parent organization
+- The cursor is automatically persisted between invocations

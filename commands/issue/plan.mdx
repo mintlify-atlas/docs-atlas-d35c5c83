@@ -1,0 +1,258 @@
+---
+title: sentry issue plan
+description: Generate a solution plan for a Sentry issue using Seer AI with specific implementation steps
+---
+
+# sentry issue plan
+
+Generate a solution plan for a Sentry issue using Seer AI. This command automatically runs root cause analysis if needed, then generates a solution plan with specific implementation steps to fix the issue.
+
+## Usage
+
+```bash
+sentry issue plan <issue-id>
+```
+
+## Issue ID Formats
+
+The `plan` command accepts the same issue identifier formats as `explain` and `view`:
+
+```bash
+# Explicit org + ID
+sentry issue plan sentry/EXTENSION-7 --cause 0
+
+# Project + suffix
+sentry issue plan cli-G --cause 1
+
+# Short ID (searches across orgs)
+sentry issue plan CLI-G --cause 0
+
+# Suffix only (requires DSN context) 
+sentry issue plan G --cause 0
+
+# Numeric ID
+sentry issue plan 123456789 --cause 0
+```
+
+## Parameters
+
+<ParamField path="issue-id" type="string" required>
+  Issue identifier in any supported format.
+</ParamField>
+
+## Flags
+
+<ParamField path="--cause" type="number" optional>
+  Root cause ID to create a plan for. Required if multiple root causes were identified by `sentry issue explain`.
+  
+  The cause ID corresponds to the numbered root causes from the explain output (0, 1, 2, ...).
+  
+  **Example:**
+  ```bash
+  sentry issue plan 123456789 --cause 0
+  sentry issue plan EXTENSION-7 --cause 1
+  ```
+</ParamField>
+
+<ParamField path="--force" type="boolean" default="false">
+  Force a new plan even if one already exists. Useful for regenerating plans after code changes.
+  
+  **Example:**
+  ```bash
+  sentry issue plan 123456789 --cause 0 --force
+  ```
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Output results as JSON including run ID, status, and solution data.
+  
+  **Example:**
+  ```bash
+  sentry issue plan EXTENSION-7 --cause 0 --json
+  ```
+</ParamField>
+
+## Examples
+
+### Basic Usage
+
+```bash
+# Generate plan for single root cause (auto-selected)
+sentry issue plan 123456789
+
+# Generate plan for specific cause when multiple exist
+sentry issue plan 123456789 --cause 0
+
+# With explicit org
+sentry issue plan sentry/EXTENSION-7 --cause 1
+```
+
+### Force Regeneration
+
+```bash
+# Regenerate plan with fresh analysis
+sentry issue plan 123456789 --cause 0 --force
+```
+
+### JSON Output
+
+```bash
+# Export to JSON
+sentry issue plan EXTENSION-7 --cause 0 --json > solution.json
+
+# Extract implementation steps
+sentry issue plan CLI-G --cause 0 --json | jq '.solution.steps'
+```
+
+## Sample Output
+
+### Human-Readable Format
+
+```
+Creating plan for cause #0...
+"Undefined variable access in processData"
+
+Generating solution... (this may take a few minutes)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Solution Plan
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Overview:
+  Add defensive null checking before calling .map() on the users array.
+  Ensure the API response is validated before processing.
+
+Implementation Steps:
+
+  1. Add null check in processData function
+     File: src/components/UserList.js
+     
+     Replace:
+       const userElements = users.map(user => renderUser(user));
+     
+     With:
+       const userElements = (users || []).map(user => renderUser(user));
+  
+  2. Add API response validation
+     File: src/api/client.js
+     
+     Add validation after API call:
+       if (!response.data || !Array.isArray(response.data.users)) {
+         throw new Error('Invalid API response: missing users array');
+       }
+  
+  3. Add error boundary around UserList component
+     File: src/pages/Dashboard.js
+     
+     Wrap component with error handling:
+       <ErrorBoundary fallback={<UserListError />}>
+         <UserList />
+       </ErrorBoundary>
+
+Testing:
+  - Test with valid API response
+  - Test with API response missing users field
+  - Test with null/undefined users value
+  - Verify error boundary displays fallback UI
+
+PR: https://github.com/your-org/your-repo/pull/123
+```
+
+### JSON Format
+
+```json
+{
+  "run_id": "autofix_abc123def456",
+  "status": "COMPLETED",
+  "solution": {
+    "overview": "Add defensive null checking before calling .map() on the users array. Ensure the API response is validated before processing.",
+    "steps": [
+      {
+        "id": 1,
+        "title": "Add null check in processData function",
+        "file": "src/components/UserList.js",
+        "diff": "- const userElements = users.map(user => renderUser(user));\n+ const userElements = (users || []).map(user => renderUser(user));"
+      },
+      {
+        "id": 2,
+        "title": "Add API response validation",
+        "file": "src/api/client.js",
+        "code": "if (!response.data || !Array.isArray(response.data.users)) {\n  throw new Error('Invalid API response: missing users array');\n}"
+      },
+      {
+        "id": 3,
+        "title": "Add error boundary around UserList component",
+        "file": "src/pages/Dashboard.js",
+        "code": "<ErrorBoundary fallback={<UserListError />}>\n  <UserList />\n</ErrorBoundary>"
+      }
+    ],
+    "testing": [
+      "Test with valid API response",
+      "Test with API response missing users field",
+      "Test with null/undefined users value",
+      "Verify error boundary displays fallback UI"
+    ],
+    "pr_url": "https://github.com/your-org/your-repo/pull/123"
+  }
+}
+```
+
+## How It Works
+
+1. **Root Cause Analysis**: If not already done, runs `sentry issue explain` first
+2. **Validate Causes**: Ensures root causes were identified and validates cause selection
+3. **Trigger Planning**: Sends the selected root cause to Seer AI for solution planning
+4. **Poll Progress**: Monitors the planning process with status updates
+5. **Extract Solution**: Retrieves and formats the generated solution plan
+
+The planning process may take several minutes as Seer analyzes code context, generates fixes, and validates the solution.
+
+## Requirements
+
+<Warning>
+**GitHub integration and code mappings required.** Seer AI needs access to your source code to generate accurate solution plans.
+</Warning>
+
+### Prerequisites
+
+- Seer AI enabled in organization settings
+- GitHub integration configured for your organization
+- Code mappings set up for your project
+- Available Seer AI budget/quota
+
+### Setup Steps
+
+1. **Enable Seer AI**: Go to Organization Settings → Processing → AI Tools
+2. **Configure GitHub**: Organization Settings → Integrations → GitHub
+3. **Set up code mappings**: Project Settings → Integrations → GitHub → Code Mappings
+
+## Multiple Root Causes
+
+If `sentry issue explain` identifies multiple root causes, you must specify which one to plan for:
+
+```bash
+# Error if multiple causes exist and --cause not specified:
+Multiple root causes found. Please specify one with --cause <id>:
+
+  0: Undefined variable access in processData function
+  1: Missing error handling in API client
+  2: Incorrect response validation logic
+
+Example: sentry issue plan 123456789 --cause 0
+```
+
+Select the cause ID that best matches the issue you want to fix first.
+
+## Notes
+
+- If only one root cause exists, `--cause` is optional and auto-selected.
+- The `--force` flag triggers a fresh plan generation, useful after code changes or to try alternative solutions.
+- Plans are cached per issue+cause combination to avoid redundant API calls.
+- The solution may include a PR link if Seer AI created a pull request with the proposed changes.
+- Organization context is automatically resolved from the issue ID.
+
+## See Also
+
+- [sentry issue explain](/commands/issue/explain) - Analyze root causes before planning
+- [sentry issue view](/commands/issue/view) - View issue details
+- [sentry issue list](/commands/issue/list) - List issues from projects
+- [AI Debugging Guide](/guides/ai-debugging) - Complete guide to using Seer AI

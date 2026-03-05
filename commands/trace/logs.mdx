@@ -1,0 +1,122 @@
+---
+title: sentry trace logs
+description: List and stream logs for a specific trace
+---
+
+## Usage
+
+```bash
+sentry trace logs <trace-id> [org]
+```
+
+List and stream logs associated with a specific trace ID. This command uses the org-scoped trace-logs endpoint.
+
+## Arguments
+
+<ParamField path="trace-id" type="string" required>
+  32-character hexadecimal trace ID to filter logs
+</ParamField>
+
+<ParamField path="org" type="string">
+  Organization slug. If not provided, will auto-detect from DSN or config.
+</ParamField>
+
+## Flags
+
+<ParamField path="--limit" type="number" default="100">
+  Number of log entries to retrieve (1-1000)
+  
+  **Alias:** `-n`
+</ParamField>
+
+<ParamField path="--query" type="string">
+  Filter query using Sentry search syntax
+  
+  **Alias:** `-q`
+</ParamField>
+
+<ParamField path="--follow" type="number">
+  Stream logs in real-time. Optionally specify poll interval in seconds (default: 2s).
+  
+  When enabled, continuously polls for new logs. Press Ctrl+C to stop.
+  
+  **Alias:** `-f`
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Output as JSON (one log entry per line)
+</ParamField>
+
+## Examples
+
+### List logs for a trace
+
+```bash
+sentry trace logs abc123def456abc123def456abc123de
+```
+
+### List logs with explicit org
+
+```bash
+sentry trace logs abc123def456abc123def456abc123de my-org
+```
+
+### Stream logs in real-time
+
+```bash
+sentry trace logs abc123def456abc123def456abc123de -f
+```
+
+### Stream with custom poll interval
+
+```bash
+sentry trace logs abc123def456abc123def456abc123de -f 5
+```
+
+### Filter to errors only
+
+```bash
+sentry trace logs abc123def456abc123def456abc123de -q 'level:error'
+```
+
+### Show more logs
+
+```bash
+sentry trace logs abc123def456abc123def456abc123de --limit 500
+```
+
+### Output as JSON
+
+```bash
+sentry trace logs abc123def456abc123def456abc123de --json
+```
+
+## Output
+
+### Human-readable format
+
+Displays a table with:
+- Timestamp (ISO 8601)
+- Severity level
+- Log message
+
+In follow mode, new logs appear as they are received.
+
+### JSON format
+
+Outputs one JSON object per log entry, one per line (newline-delimited JSON).
+
+Each log object includes:
+- `timestamp` - ISO 8601 timestamp
+- `timestamp_precise` - Nanosecond-precision timestamp
+- `severity` - Log level
+- `message` - Log message
+- Additional fields from the Sentry API
+
+## Notes
+
+- The trace-logs endpoint is org-scoped, so only organization resolution is needed
+- Default time period is 14 days for trace logs
+- In follow mode, the command polls every 2 seconds by default (configurable with `-f <seconds>`)
+- Press Ctrl+C to stop streaming mode cleanly
+- The trace ID must be a 32-character hexadecimal string

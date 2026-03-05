@@ -1,0 +1,156 @@
+---
+title: sentry project list
+description: List projects in an organization with pagination and flexible targeting
+---
+
+List projects in an organization with pagination and flexible targeting.
+
+## Usage
+
+```bash
+sentry project list [target] [flags]
+```
+
+## Target Patterns
+
+The command supports multiple targeting modes:
+
+- **Auto-detect** (no argument): Detect from DSN or config defaults
+- **Organization listing** (`<org>/`): List all projects in an org with pagination
+- **Explicit target** (`<org>/<project>`): Show a specific project
+- **Cross-org search** (`<project>`): Find a project across all accessible orgs
+
+### Examples
+
+```bash
+# Auto-detect from DSN or config
+sentry project list
+
+# List all projects in an organization (paginated)
+sentry project list sentry/
+
+# Show a specific project
+sentry project list sentry/sentry
+
+# Search for a project across all orgs
+sentry project list my-app
+```
+
+## Flags
+
+### `--limit`
+
+**Alias:** `-n`
+
+Maximum number of projects to show.
+
+- **Default:** `25`
+- **Example:** `sentry project list --limit 50`
+
+### `--platform`
+
+**Alias:** `-p`
+
+Filter projects by platform (case-insensitive partial match).
+
+- **Example:** `sentry project list --platform javascript`
+- **Example:** `sentry project list --platform python`
+
+### `--cursor`
+
+**Alias:** `-c`
+
+Cursor for pagination. Use `last` to continue from the last page, or provide a specific cursor value.
+
+**Note:** Cursor pagination requires the `<org>/` form.
+
+- **Example:** `sentry project list sentry/ -c last`
+- **Example:** `sentry project list sentry/ -c <cursor>`
+
+### `--json`
+
+Output results as JSON instead of a human-readable table.
+
+- **Example:** `sentry project list --json`
+
+## Pagination
+
+When listing projects for a specific organization using the `<org>/` form, cursor-based pagination is available:
+
+```bash
+# First page
+sentry project list acme/
+
+# Continue from last page
+sentry project list acme/ -c last
+
+# Use specific cursor
+sentry project list acme/ -c <cursor-value>
+```
+
+Cursor pagination is not available for auto-detect or cross-org search modes.
+
+## Output
+
+### Table Format (Default)
+
+Displays projects in a table with columns:
+
+- **ORG** - Organization slug
+- **PROJECT** - Project slug
+- **NAME** - Project display name
+- **PLATFORM** - Project platform (if set)
+
+### JSON Format
+
+With `--json`, outputs an object with:
+
+- `data` - Array of project objects
+- `hasMore` - Boolean indicating more results available
+- `nextCursor` (paginated mode only) - Cursor for the next page
+- `hint` (when hasMore is true) - Suggested command for pagination
+
+Each project object includes:
+
+- `id` - Project ID
+- `slug` - Project slug
+- `name` - Project name
+- `platform` - Platform identifier
+- `orgSlug` - Organization slug (added by CLI)
+
+## Examples
+
+### List projects with platform filter
+
+```bash
+sentry project list --platform javascript
+```
+
+### List projects in a specific org with pagination
+
+```bash
+# First page
+sentry project list acme-corp/ --limit 10
+
+# Next page
+sentry project list acme-corp/ -c last
+```
+
+### Get JSON output for scripting
+
+```bash
+sentry project list sentry/ --json | jq '.data[] | {slug, platform}'
+```
+
+### Find a project across all organizations
+
+```bash
+sentry project list my-app
+```
+
+## Notes
+
+- Auto-detect mode resolves organizations from config defaults or by scanning for DSNs in your codebase
+- The `--platform` flag performs case-insensitive partial matching (e.g., `javascript` matches `javascript-react`)
+- In auto-detect mode with multiple orgs, the limit multiplier adjusts to show results from all orgs
+- Self-hosted DSNs that cannot be resolved will show a note with the count of skipped DSNs

@@ -1,122 +1,144 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Sentry CLI",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#7533a7",
+    "light": "#bd8dd2",
+    "dark": "#e1d1eb"
   },
-  "favicon": "/favicon.svg",
+
+  "logo": {
+    "light": "https://media.brand.dev/71acc02b-33dd-45d5-a45c-8da62a7a64c8.svg",
+    "dark": "https://media.brand.dev/71acc02b-33dd-45d5-a45c-8da62a7a64c8.svg"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/getsentry/cli"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/getsentry/cli"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "installation",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/authentication",
+              "concepts/dsn-detection",
+              "concepts/project-resolution",
+              "concepts/monorepo-support"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Guides",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "guides/ai-debugging",
+              "guides/json-output",
+              "guides/self-hosted",
+              "guides/configuration"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "Command Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Authentication",
             "pages": [
-              "api-reference/introduction"
+              "commands/auth/login",
+              "commands/auth/logout",
+              "commands/auth/status",
+              "commands/auth/whoami"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Issues",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "commands/issue/list",
+              "commands/issue/view",
+              "commands/issue/explain",
+              "commands/issue/plan"
+            ]
+          },
+          {
+            "group": "Projects",
+            "pages": [
+              "commands/project/list",
+              "commands/project/view",
+              "commands/project/create"
+            ]
+          },
+          {
+            "group": "Organizations",
+            "pages": [
+              "commands/org/list",
+              "commands/org/view"
+            ]
+          },
+          {
+            "group": "Events & Traces",
+            "pages": [
+              "commands/event/view",
+              "commands/trace/list",
+              "commands/trace/logs"
+            ]
+          },
+          {
+            "group": "Teams & Repos",
+            "pages": [
+              "commands/team/list",
+              "commands/repo/list"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "commands/api",
+              "commands/cli/setup",
+              "commands/cli/upgrade",
+              "commands/cli/feedback"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Advanced",
+        "groups": [
+          {
+            "group": "Integrations",
+            "pages": [
+              "advanced/ci-cd",
+              "advanced/scripting",
+              "advanced/ai-agents"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "advanced/configuration-file",
+              "advanced/environment-variables",
+              "advanced/troubleshooting"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

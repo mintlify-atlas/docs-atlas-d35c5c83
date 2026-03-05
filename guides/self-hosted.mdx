@@ -1,0 +1,494 @@
+---
+title: "Self-Hosted Sentry Configuration"
+description: "Configure Sentry CLI to work with self-hosted Sentry instances"
+---
+
+Sentry CLI supports self-hosted Sentry instances. You'll need to configure the base URL and, for OAuth authentication, a client ID.
+
+## Environment Variables
+
+### SENTRY_URL
+
+Set `SENTRY_URL` to point to your self-hosted Sentry instance:
+
+```bash
+export SENTRY_URL=https://sentry.example.com
+```
+
+This variable affects:
+- API requests (all commands)
+- OAuth device flow (authentication)
+- Web UI URLs (opened in browser)
+
+<Tabs>
+  <Tab title="macOS/Linux">
+    ```bash .bashrc or .zshrc
+    # Add to your shell profile
+    export SENTRY_URL=https://sentry.example.com
+    ```
+    
+    Then reload your shell:
+    ```bash
+    source ~/.bashrc  # or ~/.zshrc
+    ```
+  </Tab>
+  
+  <Tab title="Windows (PowerShell)">
+    ```powershell
+    # Set for current session
+    $env:SENTRY_URL = "https://sentry.example.com"
+    
+    # Set permanently (user level)
+    [System.Environment]::SetEnvironmentVariable(
+        'SENTRY_URL',
+        'https://sentry.example.com',
+        'User'
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Windows (CMD)">
+    ```cmd
+    # Set for current session
+    set SENTRY_URL=https://sentry.example.com
+    
+    # Set permanently
+    setx SENTRY_URL "https://sentry.example.com"
+    ```
+  </Tab>
+  
+  <Tab title="Docker/CI">
+    ```yaml docker-compose.yml
+    services:
+      app:
+        environment:
+          - SENTRY_URL=https://sentry.example.com
+          - SENTRY_AUTH_TOKEN=${SENTRY_AUTH_TOKEN}
+    ```
+    
+    ```yaml .github/workflows/deploy.yml
+    jobs:
+      deploy:
+        env:
+          SENTRY_URL: https://sentry.example.com
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+    ```
+  </Tab>
+</Tabs>
+
+### SENTRY_CLIENT_ID
+
+<Warning>
+**OAuth device flow requires Sentry 26.1.0 or later.** For older versions, use [token-based authentication](#token-authentication-for-older-versions).
+</Warning>
+
+For OAuth authentication on self-hosted instances, you must create an OAuth application and set `SENTRY_CLIENT_ID`:
+
+<Steps>
+  <Step title="Create an OAuth Application">
+    1. Log in to your self-hosted Sentry instance
+    2. Go to **Settings > Developer Settings**
+    3. Click **Create New Application**
+    4. Set application name (e.g., "Sentry CLI")
+    5. Set **Application Type** to **Public**
+    6. Set **Redirect URIs** to `http://localhost` (required but unused for device flow)
+    7. Click **Save**
+    8. Copy the **Client ID**
+  </Step>
+  
+  <Step title="Set the environment variable">
+    ```bash
+    export SENTRY_CLIENT_ID=your-client-id-here
+    ```
+    
+    Add this to your shell profile alongside `SENTRY_URL`.
+  </Step>
+  
+  <Step title="Authenticate">
+    ```bash
+    sentry auth login
+    ```
+    
+    The CLI will use your self-hosted instance for the OAuth flow.
+  </Step>
+</Steps>
+
+<Accordion title="Example: Complete self-hosted setup">
+```bash
+# Set base URL
+export SENTRY_URL=https://sentry.example.com
+
+# Set OAuth client ID (from Developer Settings)
+export SENTRY_CLIENT_ID=abc123def456
+
+# Authenticate
+sentry auth login
+
+# Use CLI normally
+sentry issue list
+sentry project list
+```
+</Accordion>
+
+## Authentication Methods
+
+### OAuth Device Flow (Recommended)
+
+**Requirements:**
+- Sentry 26.1.0 or later
+- Both `SENTRY_URL` and `SENTRY_CLIENT_ID` set
+- Public OAuth application created in Developer Settings
+
+```bash
+# Set variables
+export SENTRY_URL=https://sentry.example.com
+export SENTRY_CLIENT_ID=your-client-id
+
+# Login
+sentry auth login
+```
+
+Follow the prompts to complete authentication in your browser.
+
+<Note>
+The OAuth flow uses `SENTRY_URL` for all authorization endpoints. Make sure your instance is accessible from your browser.
+</Note>
+
+### Token Authentication (Manual)
+
+For older versions or if you prefer manual token management:
+
+<Steps>
+  <Step title="Create an auth token">
+    1. Log in to your Sentry instance
+    2. Go to **Settings > Account > API > Auth Tokens**
+    3. Click **Create New Token**
+    4. Select scopes: `project:read`, `project:write`, `org:read`, `event:read`, `event:write`
+    5. Click **Create Token**
+    6. Copy the token (shown only once)
+  </Step>
+  
+  <Step title="Set SENTRY_AUTH_TOKEN">
+    ```bash
+    export SENTRY_AUTH_TOKEN=your-token-here
+    ```
+  </Step>
+  
+  <Step title="Verify access">
+    ```bash
+    sentry auth status
+    ```
+    
+    You should see:
+    ```
+    ✓ Authenticated as user@example.com
+    Token source: SENTRY_AUTH_TOKEN
+    ```
+  </Step>
+</Steps>
+
+<Info>
+With `SENTRY_AUTH_TOKEN` set, the CLI uses this token directly and skips OAuth. This is useful for CI/CD and older Sentry versions.
+</Info>
+
+### Token Authentication (Alternative)
+
+You can also use `SENTRY_TOKEN` instead of `SENTRY_AUTH_TOKEN`:
+
+```bash
+export SENTRY_TOKEN=your-token-here
+```
+
+<Note>
+Precedence: `SENTRY_AUTH_TOKEN` > `SENTRY_TOKEN` > stored OAuth token.
+</Note>
+
+## Verifying Configuration
+
+### Check auth status
+
+```bash
+sentry auth status
+```
+
+<Tabs>
+  <Tab title="OAuth (Success)">
+    ```bash
+    $ sentry auth status
+    ✓ Authenticated as user@example.com
+    Token source: oauth
+    Expires in: 55 minutes
+    ```
+  </Tab>
+  
+  <Tab title="Environment Token (Success)">
+    ```bash
+    $ sentry auth status
+    ✓ Authenticated as user@example.com
+    Token source: SENTRY_AUTH_TOKEN
+    ```
+  </Tab>
+  
+  <Tab title="Not Authenticated">
+    ```bash
+    $ sentry auth status
+    Error: Not authenticated
+    Run 'sentry auth login' to authenticate.
+    ```
+  </Tab>
+</Tabs>
+
+### Test API access
+
+```bash
+# List organizations
+sentry org list
+
+# List projects
+sentry project list
+
+# View a specific project
+sentry project view my-project
+```
+
+If commands fail with connection errors, verify:
+- `SENTRY_URL` is correct and accessible
+- Your self-hosted instance is running
+- Firewall rules allow access
+
+### Check effective URL
+
+The CLI uses `SENTRY_URL` for all operations. You can verify the active configuration:
+
+```bash
+# Check environment
+echo $SENTRY_URL
+
+# Test with verbose logging
+SENTRY_LOG_LEVEL=debug sentry org list 2>&1 | grep -i "request to"
+```
+
+## DSN Auto-Detection
+
+When `SENTRY_URL` is set, the CLI only detects DSNs matching your self-hosted instance:
+
+```bash
+# With SENTRY_URL=https://sentry.example.com
+
+# This DSN is detected:
+# https://abc123@sentry.example.com/4505238
+
+# This DSN is ignored (different host):
+# https://def456@o1234.ingest.us.sentry.io/4505238
+```
+
+This prevents mixing SaaS and self-hosted DSNs, which would cause API errors.
+
+<Tip>
+If you work with multiple Sentry instances, use separate shells or shell aliases with different `SENTRY_URL` values.
+</Tip>
+
+## Configuration Directory
+
+By default, the CLI stores authentication and cache data in `~/.sentry/`.
+
+For self-hosted instances, you might want separate configuration directories:
+
+```bash
+# Use a separate config directory for self-hosted
+export SENTRY_CONFIG_DIR=~/.sentry-selfhosted
+export SENTRY_URL=https://sentry.example.com
+
+sentry auth login
+```
+
+This keeps SaaS and self-hosted credentials separate.
+
+### Config Directory Contents
+
+```bash
+~/.sentry/
+├── cli.db          # SQLite database
+├── cli.db-wal      # Write-ahead log
+└── cli.db-shm      # Shared memory file
+```
+
+The database stores:
+- OAuth tokens and expiry times
+- User information
+- Organization/project cache
+- Default org/project settings
+- Pagination cursors
+
+### Moving Between Instances
+
+To switch between SaaS and self-hosted:
+
+<CodeGroup>
+```bash Using separate directories
+# SaaS alias
+alias sentry-saas='SENTRY_CONFIG_DIR=~/.sentry sentry'
+
+# Self-hosted alias
+alias sentry-sh='SENTRY_CONFIG_DIR=~/.sentry-selfhosted SENTRY_URL=https://sentry.example.com sentry'
+
+# Use them
+sentry-saas org list
+sentry-sh org list
+```
+
+```bash Using environment switching
+# Switch to self-hosted
+export SENTRY_URL=https://sentry.example.com
+export SENTRY_CONFIG_DIR=~/.sentry-selfhosted
+sentry auth login
+
+# Switch to SaaS
+unset SENTRY_URL
+export SENTRY_CONFIG_DIR=~/.sentry
+sentry auth login
+```
+</CodeGroup>
+
+## Troubleshooting
+
+### Connection Refused
+
+```bash
+Error: Cannot connect to Sentry at https://sentry.example.com
+Check your network connection and SENTRY_URL configuration
+```
+
+**Solutions:**
+- Verify the URL is correct: `curl -I $SENTRY_URL`
+- Check if Sentry is running
+- Verify firewall rules
+- Check DNS resolution: `nslookup sentry.example.com`
+
+### OAuth Client ID Required
+
+```bash
+Error: SENTRY_CLIENT_ID is required for authentication
+Set SENTRY_CLIENT_ID environment variable or use a pre-built binary
+```
+
+**Solutions:**
+- Create an OAuth application in Developer Settings
+- Set `SENTRY_CLIENT_ID` environment variable
+- Or use [token authentication](#token-authentication-manual) instead
+
+### Sentry Version Too Old
+
+```bash
+Error: Failed to initiate device flow
+404 Not Found
+```
+
+OAuth device flow requires Sentry 26.1.0+. For older versions:
+
+1. Use manual token authentication:
+   ```bash
+   export SENTRY_AUTH_TOKEN=your-token
+   ```
+
+2. Or upgrade your Sentry instance
+
+### SSL Certificate Errors
+
+If your self-hosted instance uses self-signed certificates:
+
+```bash
+# NOT RECOMMENDED: Disable SSL verification (development only)
+export NODE_TLS_REJECT_UNAUTHORIZED=0
+sentry org list
+```
+
+<Warning>
+Disabling SSL verification is insecure. Use proper certificates in production.
+</Warning>
+
+Better solutions:
+- Add your CA certificate to the system trust store
+- Use Let's Encrypt for valid certificates
+- Use a proper SSL termination proxy
+
+### Wrong Instance Being Used
+
+If commands hit the wrong Sentry instance:
+
+```bash
+# Check active configuration
+echo $SENTRY_URL
+echo $SENTRY_CLIENT_ID
+
+# Check for conflicts in environment
+env | grep SENTRY_
+```
+
+Make sure:
+- `SENTRY_URL` is set correctly
+- No conflicting values in `.env` files
+- Shell profile files don't override your values
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use shell aliases for multiple instances">
+    ```bash ~/.bashrc
+    # SaaS
+    alias sentry-saas='unset SENTRY_URL && sentry'
+    
+    # Self-hosted production
+    alias sentry-prod='SENTRY_URL=https://sentry.example.com SENTRY_CLIENT_ID=abc123 sentry'
+    
+    # Self-hosted staging
+    alias sentry-staging='SENTRY_URL=https://sentry-staging.example.com SENTRY_CLIENT_ID=def456 sentry'
+    ```
+  </Accordion>
+  
+  <Accordion title="Use .env files per project">
+    ```bash .env.production
+    SENTRY_URL=https://sentry.example.com
+    SENTRY_AUTH_TOKEN=your-token
+    ```
+    
+    Then load it:
+    ```bash
+    source .env.production
+    sentry project list
+    ```
+  </Accordion>
+  
+  <Accordion title="Document OAuth setup for team">
+    ```markdown SENTRY_SETUP.md
+    # Sentry CLI Setup (Self-Hosted)
+    
+    1. Install CLI: `npm install -g @sentry/cli-next`
+    2. Set environment variables:
+       ```bash
+       export SENTRY_URL=https://sentry.example.com
+       export SENTRY_CLIENT_ID=<ask-team-lead>
+       ```
+    3. Login: `sentry auth login`
+    4. Test: `sentry org list`
+    ```
+  </Accordion>
+  
+  <Accordion title="Use tokens in CI/CD, OAuth locally">
+    **Local development:**
+    ```bash
+    export SENTRY_URL=https://sentry.example.com
+    export SENTRY_CLIENT_ID=abc123
+    sentry auth login
+    ```
+    
+    **CI/CD:**
+    ```yaml
+    env:
+      SENTRY_URL: https://sentry.example.com
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+    ```
+    
+    This avoids OAuth flow complexity in CI while keeping local dev convenient.
+  </Accordion>
+</AccordionGroup>

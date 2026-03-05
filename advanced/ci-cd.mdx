@@ -1,0 +1,631 @@
+---
+title: CI/CD Integration
+description: Integrate Sentry CLI into your continuous integration and deployment pipelines
+---
+
+# CI/CD Integration
+
+Integrate Sentry CLI into your CI/CD pipelines to automate issue tracking, debugging, and deployment workflows.
+
+## Authentication
+
+All CI/CD environments require authentication via the `SENTRY_AUTH_TOKEN` environment variable.
+
+### Creating an Auth Token
+
+<Steps>
+  <Step title="Create a Sentry Auth Token">
+    Go to **Settings → Account → API → Auth Tokens** in Sentry and create a new token with the appropriate scopes:
+    
+    - `org:read` - View organizations and projects
+    - `project:read` - View project details
+    - `event:read` - View issues and events
+    - `event:write` - Update issue status (optional)
+  </Step>
+  
+  <Step title="Store as Secret">
+    Add the token to your CI/CD platform's secret management:
+    
+    - **GitHub Actions**: Repository Settings → Secrets → Actions
+    - **GitLab CI**: Settings → CI/CD → Variables
+    - **Jenkins**: Credentials → Add Credentials
+    - **CircleCI**: Project Settings → Environment Variables
+  </Step>
+</Steps>
+
+<Warning>
+  Never commit `SENTRY_AUTH_TOKEN` to your repository. Always use your CI platform's secret management.
+</Warning>
+
+## GitHub Actions
+
+### Basic Workflow
+
+Integrate Sentry CLI into GitHub Actions to check issues, run queries, and automate debugging.
+
+```yaml .github/workflows/sentry.yml
+name: Sentry CLI Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday at 9am
+
+jobs:
+  sentry-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Sentry CLI
+        run: |
+          curl https://cli.sentry.dev/install -fsS | bash
+          echo "$HOME/.sentry/bin" >> $GITHUB_PATH
+      
+      - name: Check critical issues
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          sentry issue list my-org/my-project \
+            --query "is:unresolved level:error" \
+            --limit 10 \
+            --json > issues.json
+          
+          # Parse and fail if critical issues exist
+          ISSUE_COUNT=$(jq 'length' issues.json)
+          echo "Found $ISSUE_COUNT critical issues"
+          
+          if [ "$ISSUE_COUNT" -gt 0 ]; then
+            echo "::error::$ISSUE_COUNT unresolved critical issues found"
+            jq -r '.[] | "- \(.title) (\(.permalink))"' issues.json
+            exit 1
+          fi
+      
+      - name: Get issue details
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          sentry issue view SENTRY-ABC --json | jq '.'
+```
+
+### Multi-Project Monitoring
+
+Monitor multiple projects in a single workflow:
+
+```yaml .github/workflows/sentry-multi.yml
+name: Multi-Project Sentry Checks
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours
+
+jobs:
+  check-all-projects:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: [frontend, backend, mobile-app]
+    steps:
+      - name: Install Sentry CLI
+        run: |
+          curl https://cli.sentry.dev/install -fsS | bash
+          echo "$HOME/.sentry/bin" >> $GITHUB_PATH
+      
+      - name: Check ${{ matrix.project }} issues
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          sentry issue list my-org/${{ matrix.project }} \
+            --query "is:unresolved" \
+            --period 24h \
+            --sort freq \
+            --limit 5 \
+            --json
+```
+
+### Advanced: AI-Powered Issue Analysis
+
+Use Sentry's AI (Seer) to get automated root cause analysis:
+
+```yaml .github/workflows/sentry-ai.yml
+name: AI Issue Analysis
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Sentry CLI
+        run: |
+          curl https://cli.sentry.dev/install -fsS | bash
+          echo "$HOME/.sentry/bin" >> $GITHUB_PATH
+      
+      - name: Get recent high-frequency issue
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+        run: |
+          ISSUE_ID=$(sentry issue list my-org/my-project \
+            --sort freq \
+            --limit 1 \
+            --json | jq -r '.[0].id')
+          
+          if [ "$ISSUE_ID" != "null" ]; then
+            echo "Analyzing issue: $ISSUE_ID"
+            
+            # Get AI explanation
+            sentry issue explain $ISSUE_ID --json > explanation.json
+            
+            # Get AI fix plan
+            sentry issue plan $ISSUE_ID --json > plan.json
+            
+            # Post to GitHub issue
+            gh issue comment ${{ github.event.issue.number }} \
+              --body "$(cat explanation.json plan.json | jq -r '.')" 
+          fi
+```
+
+## GitLab CI
+
+### Basic Pipeline
+
+```yaml .gitlab-ci.yml
+stages:
+  - test
+  - deploy
+  - monitor
+
+variables:
+  SENTRY_ORG: "my-org"
+  SENTRY_PROJECT: "my-project"
+
+# Install Sentry CLI once and cache it
+.sentry_setup:
+  before_script:
+    - |
+      if ! command -v sentry &> /dev/null; then
+        curl https://cli.sentry.dev/install -fsS | bash
+        export PATH="$HOME/.sentry/bin:$PATH"
+      fi
+  cache:
+    key: sentry-cli
+    paths:
+      - $HOME/.sentry/
+
+check-sentry-issues:
+  extends: .sentry_setup
+  stage: test
+  script:
+    - |
+      sentry issue list $SENTRY_ORG/$SENTRY_PROJECT \
+        --query "is:unresolved level:fatal" \
+        --json > critical-issues.json
+      
+      ISSUE_COUNT=$(jq 'length' critical-issues.json)
+      if [ "$ISSUE_COUNT" -gt 0 ]; then
+        echo "ERROR: $ISSUE_COUNT critical issues found:"
+        jq -r '.[] | "  - \(.title) (\(.shortId))"' critical-issues.json
+        exit 1
+      fi
+  artifacts:
+    reports:
+      dotenv: critical-issues.json
+    when: on_failure
+
+post-deploy-check:
+  extends: .sentry_setup
+  stage: monitor
+  script:
+    - |
+      echo "Checking for new issues after deployment..."
+      sentry issue list $SENTRY_ORG/$SENTRY_PROJECT \
+        --query "is:unresolved" \
+        --period 1h \
+        --sort date \
+        --limit 20 \
+        --json
+  only:
+    - main
+```
+
+### Multi-Environment Monitoring
+
+```yaml .gitlab-ci.yml
+monitor-staging:
+  extends: .sentry_setup
+  stage: monitor
+  script:
+    - sentry issue list $SENTRY_ORG/my-app-staging --json
+  environment:
+    name: staging
+  only:
+    - develop
+
+monitor-production:
+  extends: .sentry_setup
+  stage: monitor
+  script:
+    - sentry issue list $SENTRY_ORG/my-app-production --json
+  environment:
+    name: production
+  only:
+    - main
+```
+
+## Jenkins
+
+### Declarative Pipeline
+
+```groovy Jenkinsfile
+pipeline {
+    agent any
+    
+    environment {
+        SENTRY_AUTH_TOKEN = credentials('sentry-auth-token')
+        SENTRY_ORG = 'my-org'
+        SENTRY_PROJECT = 'my-project'
+    }
+    
+    stages {
+        stage('Setup') {
+            steps {
+                sh '''
+                    if ! command -v sentry &> /dev/null; then
+                        curl https://cli.sentry.dev/install -fsS | bash
+                        export PATH="$HOME/.sentry/bin:$PATH"
+                    fi
+                '''
+            }
+        }
+        
+        stage('Check Sentry Issues') {
+            steps {
+                script {
+                    sh '''
+                        export PATH="$HOME/.sentry/bin:$PATH"
+                        
+                        sentry issue list ${SENTRY_ORG}/${SENTRY_PROJECT} \
+                          --query "is:unresolved level:error" \
+                          --limit 20 \
+                          --json > issues.json
+                        
+                        ISSUE_COUNT=$(jq 'length' issues.json)
+                        
+                        if [ "$ISSUE_COUNT" -gt 10 ]; then
+                            echo "WARNING: ${ISSUE_COUNT} unresolved errors found"
+                            jq -r '.[] | "- \(.title)"' issues.json
+                        fi
+                    '''
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                echo 'Deploying...'
+            }
+        }
+        
+        stage('Post-Deploy Monitor') {
+            steps {
+                sh '''
+                    export PATH="$HOME/.sentry/bin:$PATH"
+                    
+                    echo "Monitoring for new issues..."
+                    sentry issue list ${SENTRY_ORG}/${SENTRY_PROJECT} \
+                      --period 30m \
+                      --json
+                '''
+            }
+        }
+    }
+    
+    post {
+        always {
+            archiveArtifacts artifacts: 'issues.json', allowEmptyArchive: true
+        }
+    }
+}
+```
+
+### Scripted Pipeline with Error Handling
+
+```groovy Jenkinsfile
+node {
+    def sentryOrg = 'my-org'
+    def sentryProject = 'my-project'
+    
+    withCredentials([string(credentialsId: 'sentry-auth-token', variable: 'SENTRY_AUTH_TOKEN')]) {
+        stage('Setup Sentry CLI') {
+            sh '''
+                curl https://cli.sentry.dev/install -fsS | bash
+                export PATH="$HOME/.sentry/bin:$PATH"
+                sentry auth status || exit 1
+            '''
+        }
+        
+        stage('Check Critical Issues') {
+            def issueCheck = sh(
+                script: '''
+                    export PATH="$HOME/.sentry/bin:$PATH"
+                    sentry issue list ''' + sentryOrg + '/' + sentryProject + ''' \
+                      --query "is:unresolved level:fatal" \
+                      --json
+                ''',
+                returnStdout: true
+            ).trim()
+            
+            def issues = readJSON text: issueCheck
+            
+            if (issues.size() > 0) {
+                currentBuild.result = 'UNSTABLE'
+                echo "WARNING: ${issues.size()} critical issues found"
+                
+                issues.each { issue ->
+                    echo "  - ${issue.title} (${issue.shortId})"
+                }
+            }
+        }
+    }
+}
+```
+
+## CircleCI
+
+### Configuration
+
+```yaml .circleci/config.yml
+version: 2.1
+
+orbs:
+  sentry: {}  # No official orb yet, using custom commands
+
+commands:
+  install-sentry-cli:
+    steps:
+      - run:
+          name: Install Sentry CLI
+          command: |
+            curl https://cli.sentry.dev/install -fsS | bash
+            echo 'export PATH="$HOME/.sentry/bin:$PATH"' >> $BASH_ENV
+      - run:
+          name: Verify Installation
+          command: sentry --version
+
+jobs:
+  check-issues:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - install-sentry-cli
+      - run:
+          name: Check Unresolved Issues
+          command: |
+            sentry issue list my-org/my-project \
+              --query "is:unresolved" \
+              --period 7d \
+              --json > issues.json
+            
+            ISSUE_COUNT=$(jq 'length' issues.json)
+            echo "Found $ISSUE_COUNT issues in the last 7 days"
+            
+            if [ "$ISSUE_COUNT" -gt 50 ]; then
+              echo "ERROR: Too many unresolved issues"
+              exit 1
+            fi
+      - store_artifacts:
+          path: issues.json
+  
+  analyze-top-issue:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - install-sentry-cli
+      - run:
+          name: Analyze Most Frequent Issue
+          command: |
+            ISSUE_ID=$(sentry issue list my-org/my-project \
+              --sort freq \
+              --limit 1 \
+              --json | jq -r '.[0].shortId')
+            
+            if [ "$ISSUE_ID" != "null" ]; then
+              echo "Analyzing issue: $ISSUE_ID"
+              sentry issue explain $ISSUE_ID > analysis.txt
+              sentry issue plan $ISSUE_ID >> analysis.txt
+            fi
+      - store_artifacts:
+          path: analysis.txt
+
+workflows:
+  version: 2
+  check-and-analyze:
+    jobs:
+      - check-issues:
+          context: sentry-context
+      - analyze-top-issue:
+          requires:
+            - check-issues
+          context: sentry-context
+  
+  scheduled-check:
+    triggers:
+      - schedule:
+          cron: "0 10 * * *"  # Daily at 10am
+          filters:
+            branches:
+              only:
+                - main
+    jobs:
+      - check-issues:
+          context: sentry-context
+```
+
+## Environment Variables
+
+### Required Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `SENTRY_AUTH_TOKEN` | API authentication token | `sntrys_abc123...` |
+
+### Optional Variables
+
+| Variable | Description | Default |
+|----------|-------------|----------|
+| `SENTRY_URL` | Self-hosted Sentry URL | `https://sentry.io` |
+| `SENTRY_CLIENT_ID` | OAuth client ID (self-hosted) | - |
+| `SENTRY_ORG` | Default organization slug | Auto-detected |
+| `SENTRY_PROJECT` | Default project slug | Auto-detected |
+
+### Setting Variables
+
+<CodeGroup>
+
+```bash GitHub Actions
+# In workflow file
+env:
+  SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+  SENTRY_ORG: my-org
+  SENTRY_PROJECT: my-project
+```
+
+```yaml GitLab CI
+# In .gitlab-ci.yml
+variables:
+  SENTRY_ORG: "my-org"
+  SENTRY_PROJECT: "my-project"
+# SENTRY_AUTH_TOKEN set in GitLab Settings → CI/CD → Variables
+```
+
+```groovy Jenkins
+// In Jenkinsfile
+environment {
+    SENTRY_AUTH_TOKEN = credentials('sentry-auth-token')
+    SENTRY_ORG = 'my-org'
+    SENTRY_PROJECT = 'my-project'
+}
+```
+
+```yaml CircleCI
+# In .circleci/config.yml, use contexts
+workflows:
+  version: 2
+  build:
+    jobs:
+      - test:
+          context: sentry-context  # Contains SENTRY_AUTH_TOKEN
+```
+
+</CodeGroup>
+
+## Best Practices
+
+### 1. Use JSON Output for Parsing
+
+Always use `--json` flag when processing output in scripts:
+
+```bash
+sentry issue list my-org/my-project --json | jq '.[] | select(.level == "error")'
+```
+
+### 2. Handle Rate Limits
+
+Add retry logic for API rate limits:
+
+```bash
+for i in {1..3}; do
+  if sentry issue list my-org/my-project --json > issues.json; then
+    break
+  fi
+  echo "Retry $i/3..."
+  sleep 5
+done
+```
+
+### 3. Cache CLI Binary
+
+Cache the Sentry CLI binary to speed up builds:
+
+```yaml
+# GitHub Actions
+- uses: actions/cache@v4
+  with:
+    path: ~/.sentry
+    key: sentry-cli-${{ runner.os }}
+```
+
+### 4. Set Build Status
+
+Fail builds based on issue severity:
+
+```bash
+CRITICAL_COUNT=$(sentry issue list my-org/my-project \
+  --query "is:unresolved level:fatal" \
+  --json | jq 'length')
+
+if [ "$CRITICAL_COUNT" -gt 0 ]; then
+  echo "::error::Build failed: $CRITICAL_COUNT critical issues"
+  exit 1
+fi
+```
+
+### 5. Scheduled Monitoring
+
+Set up scheduled jobs to monitor issue trends:
+
+```yaml
+on:
+  schedule:
+    - cron: '0 */4 * * *'  # Every 4 hours
+```
+
+## Troubleshooting
+
+### Authentication Failures
+
+If authentication fails, verify:
+
+1. Token has correct scopes in Sentry
+2. Environment variable is set correctly
+3. Token hasn't expired
+
+```bash
+# Test authentication
+sentry auth status
+```
+
+### Command Not Found
+
+Ensure CLI is in PATH:
+
+```bash
+export PATH="$HOME/.sentry/bin:$PATH"
+```
+
+### API Rate Limits
+
+If you hit rate limits, reduce polling frequency or use pagination:
+
+```bash
+sentry issue list my-org/my-project --limit 10 --json
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Scripting Guide" icon="code" href="/advanced/scripting">
+    Build automation scripts with JSON output
+  </Card>
+  <Card title="AI Agents" icon="robot" href="/advanced/ai-agents">
+    Integrate with AI coding assistants
+  </Card>
+</CardGroup>

@@ -1,0 +1,144 @@
+---
+title: Introduction to Sentry CLI
+description: A command-line interface for Sentry built for developers and AI agents, featuring zero-config project detection, AI-powered debugging, and comprehensive API access.
+---
+
+# Introduction to Sentry CLI
+
+Sentry CLI is a modern command-line interface for [Sentry](https://sentry.io), built with [Bun](https://bun.sh) and designed for both developers and AI agents. It provides powerful tools for debugging, monitoring, and managing your Sentry projects directly from your terminal.
+
+## What is Sentry CLI?
+
+Sentry CLI is a unified command-line tool that gives you direct access to your Sentry organization, projects, issues, and events. It eliminates the need to switch between your code and the browser by bringing Sentry's monitoring and debugging capabilities into your development workflow.
+
+<Note>
+Sentry CLI is built for speed with native binaries, SQLite caching, and automatic project detection from your codebase.
+</Note>
+
+## Key Benefits
+
+<CardGroup cols={2}>
+  <Card title="Zero-Config Experience" icon="wand-magic-sparkles">
+    Automatically detects your project from DSNs in `.env` files or source code. No flags, no manual configuration needed.
+  </Card>
+  
+  <Card title="AI-Powered Debugging" icon="robot">
+    Get root cause analysis and fix plans powered by Seer AI directly in your terminal with `sentry issue explain` and `sentry issue plan`.
+  </Card>
+  
+  <Card title="Monorepo Support" icon="folder-tree">
+    Works seamlessly with multiple projects in a single repository. Generates short aliases for easy navigation between projects.
+  </Card>
+  
+  <Card title="Agent-Friendly Output" icon="code">
+    All commands support `--json` output for scripting, pipelines, and integration with AI coding agents.
+  </Card>
+</CardGroup>
+
+## Core Features
+
+### DSN Auto-Detection
+
+Sentry CLI scans your codebase to automatically identify your project:
+- Searches `.env` files for Sentry configuration
+- Parses source code across JavaScript, Python, Go, Java, Ruby, and PHP
+- Walks up from your current directory to find project boundaries
+- Caches project information for fast repeated access
+
+### Multi-Region Support
+
+Seamlessly works with Sentry's global infrastructure:
+- Automatic region detection (us.sentry.io, de.sentry.io, etc.)
+- Fan-out to regional APIs when needed
+- Caches region mappings for your organizations
+
+### Comprehensive Commands
+
+Access all major Sentry resources:
+
+| Command | Description |
+|---------|-------------|
+| `sentry auth` | Login, logout, check authentication status |
+| `sentry org` | List and view organizations |
+| `sentry project` | List and view projects |
+| `sentry issue` | List, view, explain, and plan issues |
+| `sentry event` | View event details |
+| `sentry api` | Make direct API requests |
+
+### Secure Credential Storage
+
+Authentication tokens are stored securely in `~/.sentry/` with restricted file permissions (mode 600), ensuring your credentials remain protected.
+
+<Note>
+Supports both OAuth device flow for interactive login and API tokens for CI/CD environments.
+</Note>
+
+## Use Cases
+
+### For Developers
+
+- **Quick issue triage**: List and filter issues without leaving your terminal
+- **Deep debugging**: Get AI-powered explanations for complex errors
+- **Project management**: View project configuration and recent activity
+- **Browser shortcuts**: Use `-w` flag to open any resource directly in your browser
+
+### For AI Agents
+
+- **JSON output**: All commands support `--json` for programmatic access
+- **Predictable behavior**: Consistent command structure and error handling
+- **Batch operations**: Script multiple operations with reliable exit codes
+- **Context detection**: Automatic project detection reduces configuration overhead
+
+### For CI/CD Pipelines
+
+- **Environment variable auth**: Use `SENTRY_AUTH_TOKEN` for non-interactive authentication
+- **Scriptable commands**: Integrate with deployment and monitoring workflows
+- **Direct API access**: Use `sentry api` for custom operations
+
+## Example Workflow
+
+```bash
+# Authenticate once
+sentry auth login
+
+# Navigate to your project directory
+cd ~/my-project
+
+# List recent issues (auto-detects project from your codebase)
+sentry issue list
+
+# Get AI-powered root cause analysis
+sentry issue explain PROJ-ABC
+
+# Generate a fix plan
+sentry issue plan PROJ-ABC
+
+# Open issue in browser for more details
+sentry issue view PROJ-ABC -w
+```
+
+## Technical Architecture
+
+Sentry CLI is built on modern technologies:
+
+- **Runtime**: [Bun](https://bun.sh) for fast startup and execution
+- **CLI Framework**: [Stricli](https://bloomberg.github.io/stricli/) for robust command parsing
+- **API Client**: Type-safe HTTP client with automatic retry and caching
+- **Local Storage**: SQLite database for caching project data, regions, and auth tokens
+- **Platform Support**: Native binaries for macOS (x64/ARM64), Linux (x64/ARM64), and Windows (x64)
+
+<Note>
+Sentry CLI requires Node.js 22+ when installed via npm, or can be run directly with the native binary.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install Sentry CLI using your preferred method
+  </Card>
+  
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get started with authentication and basic commands
+  </Card>
+</CardGroup>

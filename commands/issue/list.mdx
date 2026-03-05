@@ -1,0 +1,265 @@
+---
+title: sentry issue list
+description: List issues from Sentry projects with automatic detection, pagination, and filtering
+---
+
+# sentry issue list
+
+List issues from Sentry projects. Supports monorepos with multiple detected projects.
+
+## Usage
+
+```bash
+sentry issue list [target]
+```
+
+## Target Patterns
+
+The `list` command supports multiple target resolution strategies:
+
+```bash
+# Auto-detect from DSN or config
+sentry issue list
+
+# Explicit org and project
+sentry issue list <org>/<project>
+
+# All projects in org (trailing / required)
+sentry issue list <org>/
+
+# Find project across all orgs
+sentry issue list <project>
+```
+
+### Auto-Detection
+
+When no target is specified, Sentry CLI automatically detects your project by:
+- Scanning `.env` files for DSNs
+- Parsing source code (JavaScript, Python, Go, Java, Ruby, PHP)
+- Walking up from current directory to find project boundaries
+- Using cached project information
+
+In monorepos with multiple Sentry projects, all detected projects are shown with short aliases for easy navigation.
+
+## Parameters
+
+<ParamField path="target" type="string" optional>
+  Organization and/or project identifier. See target patterns above.
+</ParamField>
+
+## Flags
+
+<ParamField path="--query" type="string" optional>
+  Search query using Sentry search syntax. Filter issues by error message, tags, or custom attributes.
+  
+  **Alias:** `-q`
+  
+  **Example:**
+  ```bash
+  sentry issue list -q "level:error"
+  sentry issue list -q "browser.name:Chrome"
+  ```
+</ParamField>
+
+<ParamField path="--limit" type="number" default="25">
+  Total number of issues to display (max 1000). When multiple projects are detected, the limit is distributed evenly across them.
+  
+  **Alias:** `-n`
+  
+  **Example:**
+  ```bash
+  sentry issue list -n 50
+  ```
+</ParamField>
+
+<ParamField path="--sort" type="string" default="date">
+  Sort order for issues. Valid values:
+  - `date` - Most recently seen issues first (default)
+  - `new` - Most recently created issues first
+  - `freq` - Most frequently occurring issues first
+  - `user` - Issues affecting the most users first
+  
+  **Alias:** `-s`
+  
+  **Example:**
+  ```bash
+  sentry issue list --sort freq
+  sentry issue list -s user
+  ```
+</ParamField>
+
+<ParamField path="--period" type="string" default="90d">
+  Time period for issue activity. Only issues with activity in this period are shown.
+  
+  **Alias:** `-t`
+  
+  **Format:** `<number><unit>` where unit is `h` (hours), `d` (days), or `w` (weeks)
+  
+  **Example:**
+  ```bash
+  sentry issue list --period 24h
+  sentry issue list -t 14d
+  ```
+</ParamField>
+
+<ParamField path="--cursor" type="string" optional>
+  Pagination cursor for multi-page results. Use `last` to continue from the previous page.
+  
+  **Alias:** `-c`
+  
+  **Example:**
+  ```bash
+  # First page
+  sentry issue list org/ -n 100
+  
+  # Next page
+  sentry issue list org/ -n 100 -c last
+  ```
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Output results as JSON for scripting and integration with other tools.
+  
+  **Example:**
+  ```bash
+  sentry issue list --json | jq '.data[] | {id, title}'
+  ```
+</ParamField>
+
+## Examples
+
+### Basic Usage
+
+```bash
+# List issues from auto-detected project
+sentry issue list
+
+# List issues from specific project
+sentry issue list sentry/cli
+
+# List all issues across an organization
+sentry issue list sentry/
+```
+
+### Filtering and Sorting
+
+```bash
+# Show only error-level issues
+sentry issue list -q "level:error"
+
+# Show most frequently occurring issues
+sentry issue list --sort freq
+
+# Show issues from the last 24 hours
+sentry issue list --period 24h
+
+# Combine filters
+sentry issue list -q "browser.name:Chrome" -s user -t 7d -n 50
+```
+
+### Pagination
+
+```bash
+# Get first 100 issues
+sentry issue list sentry/ -n 100
+
+# Get next page
+sentry issue list sentry/ -n 100 -c last
+
+# Continue pagination
+sentry issue list sentry/ -n 100 -c last
+```
+
+### JSON Output
+
+```bash
+# Export to JSON file
+sentry issue list --json > issues.json
+
+# Process with jq
+sentry issue list --json | jq '.data[] | select(.level == "error")'
+
+# Count unresolved issues
+sentry issue list --json | jq '.data | length'
+```
+
+## Sample Output
+
+### Human-Readable Format
+
+```
+Issues in sentry/cli:
+
+ID          TITLE                                      EVENTS  USERS  LAST SEEN
+EXTENSION-7 TypeError: Cannot read property 'map'     142     23     2 hours ago
+CLI-G       ReferenceError: foo is not defined        89      12     5 hours ago
+CLI-4Y      Network request failed with status 500    56      8      1 day ago
+
+Tip: Use 'sentry issue view <ID>' to view details (bold part works as shorthand).
+```
+
+### Multi-Project Format
+
+```
+Issues from 3 projects:
+
+ALIAS  ID          TITLE                                      EVENTS  USERS
+c      CLI-G       ReferenceError: foo is not defined        89      12
+e      EXT-7       TypeError: Cannot read property 'map'     142     23
+s      SPOT-4Y     Network request failed                    56      8
+
+Tip: Use 'sentry issue view <ALIAS>' to view details (see ALIAS column).
+
+More issues available — use -n 100 or -c last for more.
+```
+
+### JSON Format
+
+```json
+{
+  "data": [
+    {
+      "id": "123456789",
+      "shortId": "EXTENSION-7",
+      "title": "TypeError: Cannot read property 'map' of undefined",
+      "culprit": "processData in app.js",
+      "level": "error",
+      "status": "unresolved",
+      "count": "142",
+      "userCount": 23,
+      "firstSeen": "2024-03-01T10:30:00Z",
+      "lastSeen": "2024-03-05T20:15:00Z",
+      "permalink": "https://sentry.io/organizations/sentry/issues/123456789/",
+      "project": {
+        "slug": "cli",
+        "name": "Sentry CLI"
+      }
+    }
+  ],
+  "hasMore": true
+}
+```
+
+## Budget Distribution
+
+When multiple projects are detected, the `--limit` is distributed evenly across them:
+
+1. **Phase 1**: Each project gets `ceil(limit / num_projects)` quota
+2. **Phase 2**: If total fetched < limit and some projects have more issues, surplus is redistributed
+3. **Trimming**: Results are trimmed to the global limit while guaranteeing at least one issue per project
+
+This ensures fair representation across all projects while staying within the specified limit.
+
+## Notes
+
+- The API caps individual requests at 100 issues per page. The CLI automatically handles pagination to reach your specified `--limit` (up to 1000).
+- Use `--cursor last` to fetch the next page without re-fetching previous results.
+- The cursor encodes all search parameters (sort, query, period), so changing filters resets pagination.
+- In org-wide mode (`org/`), the ALIAS column helps identify which project each issue belongs to.
+
+## See Also
+
+- [sentry issue view](/commands/issue/view) - View detailed information about a specific issue
+- [sentry issue explain](/commands/issue/explain) - Get AI-powered root cause analysis
+- [Project Resolution](/concepts/project-resolution) - How auto-detection works
+- [Monorepo Support](/concepts/monorepo-support) - Working with multiple projects

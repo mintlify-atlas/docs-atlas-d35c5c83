@@ -1,0 +1,78 @@
+---
+title: sentry auth whoami
+description: Show the currently authenticated user
+---
+
+Fetch and display the identity of the currently authenticated user.
+
+## Usage
+
+```bash
+sentry auth whoami [options]
+```
+
+## Description
+
+Display the currently authenticated user's identity by fetching live from the Sentry API. Unlike [`sentry auth status`](/commands/auth/status), this command only shows who you are — no token details, no defaults, no org verification.
+
+This calls the Sentry API live (not cached) so the result always reflects the current token. Works with all token types: OAuth, API tokens, and OAuth App tokens.
+
+<Note>
+  This is a top-level alias for convenience. You can also run `sentry whoami` without the `auth` subcommand.
+</Note>
+
+## Options
+
+<ParamField path="--json" type="boolean" default="false">
+  Output as JSON. The JSON format includes `id`, `name`, `username`, and `email` fields.
+</ParamField>
+
+## Examples
+
+### Show current user
+
+```bash
+sentry auth whoami
+```
+
+Expected output:
+```
+user@example.com (username)
+```
+
+### JSON output
+
+```bash
+sentry auth whoami --json
+```
+
+Expected output:
+```json
+{
+  "id": "734567",
+  "name": "John Doe",
+  "username": "johndoe",
+  "email": "user@example.com"
+}
+```
+
+### Using top-level alias
+
+```bash
+sentry whoami
+```
+
+Expected output:
+```
+user@example.com (username)
+```
+
+<Tip>
+  Use `whoami` for a quick identity check. For comprehensive authentication details including token status and defaults, use [`sentry auth status`](/commands/auth/status) instead.
+</Tip>
+
+## Related Commands
+
+- [`sentry auth status`](/commands/auth/status) - View comprehensive authentication status
+- [`sentry auth login`](/commands/auth/login) - Authenticate with Sentry
+- [`sentry auth logout`](/commands/auth/logout) - Log out and remove credentials

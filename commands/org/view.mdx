@@ -1,0 +1,115 @@
+---
+title: sentry org view
+description: View detailed information about a Sentry organization
+---
+
+View detailed information about a Sentry organization.
+
+## Usage
+
+```bash
+sentry org view [org] [flags]
+```
+
+## Arguments
+
+### Optional: `org`
+
+**Optional**
+
+Organization slug. If not provided, the organization is resolved from:
+
+1. Config defaults (set via DSN detection)
+2. `SENTRY_DSN` environment variable
+3. DSN detection in source code
+
+## Flags
+
+### `--json`
+
+Output results as JSON instead of human-readable format.
+
+- **Example:** `sentry org view --json`
+
+### `--web`
+
+**Alias:** `-w`
+
+Open the organization in your browser instead of displaying details in the terminal.
+
+- **Example:** `sentry org view acme-corp -w`
+
+## Output
+
+### Human-Readable Format (Default)
+
+Displays organization details including:
+
+- **Organization** - Organization slug
+- **Name** - Organization display name
+- **ID** - Organization ID
+- **Status** - Organization status
+- **Created** - Creation timestamp
+
+If the organization was auto-detected, shows the detection source (e.g., "Detected from: .env").
+
+### JSON Format
+
+With `--json`, outputs the complete organization object including:
+
+- `id` - Organization ID
+- `slug` - Organization slug
+- `name` - Organization name
+- `status` - Organization status
+- `dateCreated` - Creation timestamp
+- Additional API fields
+
+## Examples
+
+### View organization details
+
+```bash
+sentry org view acme-corp
+```
+
+### Auto-detect organization from current directory
+
+```bash
+# Detects organization from DSN in .env or source code
+sentry org view
+```
+
+### Open organization in browser
+
+```bash
+sentry org view acme-corp --web
+```
+
+### Get JSON for scripting
+
+```bash
+sentry org view acme-corp --json | jq '.slug'
+```
+
+## Auto-Detection
+
+When the organization argument is omitted, the CLI attempts to detect it from:
+
+1. **Config defaults** - Previously set default organization
+2. **Environment variable** - `SENTRY_DSN` containing an organization identifier
+3. **Source code** - Scanning for DSNs in:
+   - `.env` files
+   - JavaScript/TypeScript files
+   - Python files
+   - Go files
+   - Java files
+   - Ruby files
+   - PHP files
+
+The detection walks up from the current directory to find project roots.
+
+## Notes
+
+- If no organization can be resolved, you must provide the slug explicitly
+- The command requires authentication (use `sentry auth login` if needed)
+- Organization data is fetched fresh from the API (not cached)

@@ -1,0 +1,129 @@
+---
+title: sentry auth status
+description: View authentication status and verify credentials
+---
+
+Display information about your current authentication status, including whether you're logged in and your default organization/project settings.
+
+## Usage
+
+```bash
+sentry auth status [options]
+```
+
+## Description
+
+Display comprehensive information about your current authentication status:
+- Authentication source (OAuth, API token, or environment variable)
+- User identity
+- Token information (masked by default)
+- Token expiration and auto-refresh status
+- Default organization and project settings
+- Credential verification via live API call
+
+The command verifies your credentials by fetching the list of organizations you have access to.
+
+<Note>
+  Unlike [`sentry auth whoami`](/commands/auth/whoami), this command shows detailed token information, expiration status, and default settings in addition to user identity.
+</Note>
+
+## Options
+
+<ParamField path="--show-token" type="boolean" default="false">
+  Show the stored token in full instead of masking it. Use with caution as this exposes your authentication token.
+</ParamField>
+
+## Examples
+
+### View authentication status
+
+```bash
+sentry auth status
+```
+
+Expected output:
+```
+Config: ~/.sentry/config.db
+Status: Authenticated ✓
+User: user@example.com (username)
+
+Token: sntrys_eyJ*********************Xjw (masked)
+Expires: in 6 days
+Auto-refresh: enabled
+
+Defaults:
+  Organization: my-org
+  Project: my-project
+
+Verifying credentials...
+
+✓ Access verified. You have access to 3 organization(s):
+  - My Organization (my-org)
+  - Another Org (another-org)
+  - Test Org (test-org)
+```
+
+### Show full token
+
+```bash
+sentry auth status --show-token
+```
+
+Expected output:
+```
+Config: ~/.sentry/config.db
+Status: Authenticated ✓
+User: user@example.com (username)
+
+Token: sntrys_eyJpYXQiOjE3MzUwNjQ2MjMsInVybCI6Imh0dHBzOi8vc2VudHJ5LmlvIiwidXNlcl9pZCI6NzM0NTY3LCJyZWdpb24iOiJ1cyJ9Xjw
+Expires: in 6 days
+Auto-refresh: enabled
+
+Defaults:
+  Organization: my-org
+  Project: my-project
+
+Verifying credentials...
+
+✓ Access verified. You have access to 3 organization(s):
+  - My Organization (my-org)
+  - Another Org (another-org)
+  - Test Org (test-org)
+```
+
+### Status with environment variable authentication
+
+```bash
+SENTRY_AUTH_TOKEN=sntrys_xxx sentry auth status
+```
+
+Expected output:
+```
+Status: Authenticated via SENTRY_AUTH_TOKEN environment variable ✓
+User: user@example.com (username)
+
+Token: sntrys_xxx
+
+Defaults:
+  Organization: my-org
+
+Verifying credentials...
+
+✓ Access verified. You have access to 2 organization(s):
+  - My Organization (my-org)
+  - Test Org (test-org)
+```
+
+<Tip>
+  The status command shows up to 5 organizations. If you have access to more, the list will be truncated with a count of additional organizations.
+</Tip>
+
+<Note>
+  Environment variable tokens (`SENTRY_AUTH_TOKEN`, `SENTRY_TOKEN`) do not have expiration or auto-refresh capabilities. The status output will omit these fields when authenticated via environment variables.
+</Note>
+
+## Related Commands
+
+- [`sentry auth login`](/commands/auth/login) - Authenticate with Sentry
+- [`sentry auth logout`](/commands/auth/logout) - Log out and remove credentials
+- [`sentry auth whoami`](/commands/auth/whoami) - Show only user identity (simpler output)

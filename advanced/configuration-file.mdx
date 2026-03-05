@@ -1,0 +1,348 @@
+---
+title: Configuration File
+description: SQLite database structure, schema, and cache management
+---
+
+The Sentry CLI stores its configuration, authentication tokens, and cached data in a local SQLite database. This page documents the database structure, cache behavior, and file locations.
+
+## Database Location
+
+The configuration database is stored at:
+
+- **Linux/macOS**: `~/.config/sentry-cli/config.db`
+- **Windows**: `%APPDATA%\sentry-cli\config.db`
+
+You can override this location by setting the `SENTRY_CONFIG_DIR` environment variable:
+
+```bash
+export SENTRY_CONFIG_DIR=/path/to/custom/config
+```
+
+## Database Schema
+
+The CLI uses SQLite with a versioned schema system. The current schema version is **8**.
+
+### Core Tables
+
+#### schema_version
+
+Tracks the current database schema version for migrations.
+
+```sql
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY
+)
+```
+
+#### auth
+
+Stores OAuth authentication tokens (single-row table).
+
+```sql
+CREATE TABLE IF NOT EXISTS auth (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    token TEXT,
+    refresh_token TEXT,
+    expires_at INTEGER,
+    issued_at INTEGER,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+)
+```
+
+- `id`: Always 1 (enforced by CHECK constraint)
+- `token`: OAuth access token
+- `refresh_token`: OAuth refresh token for automatic renewal
+- `expires_at`: Token expiration timestamp (milliseconds since epoch)
+- `issued_at`: Token issue timestamp (milliseconds since epoch)
+- `updated_at`: Last update timestamp (auto-managed)
+
+**Token Refresh**: Tokens are automatically refreshed when less than 10% of their lifetime remains (configurable via `REFRESH_THRESHOLD` constant). Default token lifetime is 1 hour.
+
+#### defaults
+
+Stores default organization and project (single-row table).
+
+```sql
+CREATE TABLE IF NOT EXISTS defaults (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    organization TEXT,
+    project TEXT,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+)
+```
+
+- `organization`: Default organization slug
+- `project`: Default project slug
+- `updated_at`: Last update timestamp (auto-managed)
+
+#### user_info
+
+Caches authenticated user information (single-row table).
+
+```sql
+CREATE TABLE IF NOT EXISTS user_info (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    user_id TEXT NOT NULL,
+    email TEXT,
+    username TEXT,
+    name TEXT,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+)
+```
+
+#### instance_info
+
+Stores a unique instance ID for telemetry (single-row table).
+
+```sql
+CREATE TABLE IF NOT EXISTS instance_info (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    instance_id TEXT NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+)
+```
+
+### Cache Tables
+
+#### project_cache
+
+Caches project metadata from the Sentry API.
+
+```sql
+CREATE TABLE IF NOT EXISTS project_cache (
+    cache_key TEXT PRIMARY KEY,
+    org_slug TEXT NOT NULL,
+    org_name TEXT NOT NULL,
+    project_slug TEXT NOT NULL,
+    project_name TEXT NOT NULL,
+    project_id TEXT,
+    cached_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+    last_accessed INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+)
+```
+
+- `cache_key`: Composite key (typically `org_slug/project_slug`)
+- `project_id`: Numeric project ID (added in schema version 7)
+- **No TTL**: Cache entries remain valid indefinitely and are updated on access
+
+#### dsn_cache
+
+Caches DSN resolution results (maps DSNs to org/project information).
+
+```sql
+CREATE TABLE IF NOT EXISTS dsn_cache (
+    directory TEXT PRIMARY KEY,
+    dsn TEXT NOT NULL,
+    project_id TEXT NOT NULL,
+    org_id TEXT,
+    source TEXT NOT NULL,
+    source_path TEXT,
+    resolved_org_slug TEXT,
+    resolved_org_name TEXT,
+    resolved_project_slug TEXT,
+    resolved_project_name TEXT,
+    fingerprint TEXT,
+    all_dsns_json TEXT,
+    source_mtimes_json TEXT,
+    dir_mtimes_json TEXT,
+    root_dir_mtime INTEGER,
+    ttl_expires_at INTEGER,
+    cached_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+    last_accessed INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+)
+```
+
+- `source`: Detection source (e.g., `.env`, `src/index.js`)
+- `fingerprint`: Content hash for invalidation
+- `*_json`: JSON-encoded metadata for change detection
+- `ttl_expires_at`: Time-based expiration (added in schema version 4)
+
+#### project_root_cache
+
+Caches project root detection results.
+
+```sql
+CREATE TABLE IF NOT EXISTS project_root_cache (
+    cwd TEXT PRIMARY KEY,
+    project_root TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    cwd_mtime INTEGER NOT NULL,
+    cached_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+    ttl_expires_at INTEGER NOT NULL
+)
+```
+
+- `cwd`: Working directory used as cache key
+- `reason`: Detection method (e.g., `.git`, `package.json`)
+- `cwd_mtime`: Directory modification time for invalidation
+
+#### project_aliases
+
+Stores short aliases for projects (used in monorepos).
+
+```sql
+CREATE TABLE IF NOT EXISTS project_aliases (
+    alias TEXT PRIMARY KEY,
+    org_slug TEXT NOT NULL,
+    project_slug TEXT NOT NULL,
+    dsn_fingerprint TEXT,
+    cached_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+    last_accessed INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+)
+```
+
+#### org_regions
+
+Caches organization region URLs (for multi-region support).
+
+```sql
+CREATE TABLE IF NOT EXISTS org_regions (
+    org_slug TEXT PRIMARY KEY,
+    org_id TEXT,
+    region_url TEXT NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+)
+```
+
+- `org_id`: Numeric organization ID (added in schema version 8)
+- `region_url`: Regional API endpoint (e.g., `https://us.sentry.io`)
+
+#### pagination_cursors
+
+Caches pagination cursors for `--cursor last` support.
+
+```sql
+CREATE TABLE IF NOT EXISTS pagination_cursors (
+    command_key TEXT NOT NULL,
+    context TEXT NOT NULL,
+    cursor TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    PRIMARY KEY (command_key, context)
+)
+```
+
+- **TTL**: 5 minutes (ephemeral)
+- **Composite primary key**: Added in schema version 6
+
+#### metadata
+
+Generic key-value store for CLI metadata.
+
+```sql
+CREATE TABLE IF NOT EXISTS metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+)
+```
+
+Currently used for:
+- Version check timestamps
+- Last upgrade notification
+
+## Schema Migrations
+
+The CLI automatically migrates the database schema when you upgrade to a new version.
+
+### Migration History
+
+| Version | Changes |
+|---------|----------|
+| 1 → 2   | Added `org_regions`, `user_info`, `instance_info` tables |
+| 2 → 3   | Added `name` column to `user_info` |
+| 3 → 4   | Added detection caching columns to `dsn_cache`, added `project_root_cache` |
+| 4 → 5   | Added `pagination_cursors` table |
+| 5 → 6   | Fixed `pagination_cursors` composite primary key |
+| 6 → 7   | Added `project_id` column to `project_cache` |
+| 7 → 8   | Added `org_id` column to `org_regions` |
+
+### Auto-Repair
+
+If the CLI detects schema issues (missing tables or columns), it automatically repairs them. This is useful when:
+- The database was corrupted
+- A previous migration failed
+- The database was manually modified
+
+To disable auto-repair:
+
+```bash
+export SENTRY_CLI_NO_AUTO_REPAIR=1
+```
+
+## Cache TTLs
+
+<Accordion title="Cache Expiration Strategy">
+
+The CLI uses different cache strategies for different data types:
+
+- **Authentication tokens**: Refreshed when < 10% of lifetime remains (default: 1 hour)
+- **Pagination cursors**: 5 minutes (hardcoded)
+- **Project metadata**: No expiration (updated on access)
+- **DSN resolution**: Content-based invalidation via fingerprints + optional TTL
+- **Project root**: Content-based invalidation via directory mtime + TTL
+- **Organization regions**: No expiration (updated on access)
+
+</Accordion>
+
+## Database Maintenance
+
+### Manual Inspection
+
+You can inspect the database using any SQLite client:
+
+```bash
+sqlite3 ~/.config/sentry-cli/config.db
+```
+
+```sql
+-- View current schema version
+SELECT version FROM schema_version;
+
+-- Check authentication status
+SELECT token IS NOT NULL AS authenticated,
+       expires_at,
+       datetime(expires_at/1000, 'unixepoch') AS expires
+FROM auth WHERE id = 1;
+
+-- View default org/project
+SELECT organization, project FROM defaults WHERE id = 1;
+
+-- List cached projects
+SELECT org_slug, project_slug, project_name
+FROM project_cache
+ORDER BY last_accessed DESC;
+```
+
+### Clear All Data
+
+To reset the CLI to a clean state, delete the entire config directory:
+
+```bash
+rm -rf ~/.config/sentry-cli/
+```
+
+The CLI will automatically recreate the database on next run.
+
+### Clear Specific Data
+
+Use the `sentry auth logout` command to clear authentication data (also clears user info, org regions, and pagination cursors):
+
+```bash
+sentry auth logout
+```
+
+## Database Errors
+
+If you encounter database errors:
+
+1. **Check permissions**: Ensure the CLI can write to `~/.config/sentry-cli/`
+2. **Check disk space**: SQLite requires free space for temporary files
+3. **Try auto-repair**: The CLI will attempt to fix schema issues automatically
+4. **Manual reset**: Delete the database file and let the CLI recreate it
+
+Common error messages:
+
+- `attempt to write a readonly database`: Check file/directory permissions
+- `no such table`: Schema is corrupted, auto-repair should fix it
+- `no such column`: Schema is outdated, auto-repair should fix it
+
+See the [Troubleshooting](./troubleshooting) page for detailed error solutions.

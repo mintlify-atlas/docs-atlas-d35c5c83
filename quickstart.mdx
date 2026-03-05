@@ -1,80 +1,465 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start Guide
+description: Get started with Sentry CLI in minutes. Learn how to authenticate, run your first commands, and leverage automatic project detection.
 ---
 
-## Get started in three steps
+# Quick Start Guide
 
-Get your documentation site running locally and make your first customization.
+This guide will walk you through authenticating with Sentry and running your first commands. In just a few minutes, you'll be able to list issues, view event details, and get AI-powered debugging insights.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+- Sentry CLI installed ([see Installation](/installation))
+- A Sentry account ([sign up for free](https://sentry.io/signup/))
+- An existing project in Sentry (optional, but recommended)
+
+## Step 1: Authentication
+
+Before using Sentry CLI, you need to authenticate with your Sentry account. Sentry CLI supports two authentication methods:
+
+### OAuth Device Flow (Recommended)
+
+The OAuth device flow is the easiest way to authenticate interactively:
+
+```bash
+sentry auth login
+```
+
+<Steps>
+  <Step title="Start the Authentication Flow">
+    Run the command above. You'll see output like:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```
+    Press Enter to open https://sentry.io/device in your browser...
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    Or visit: https://sentry.io/device
+    Enter code: ABCD-EFGH
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+    ⣾ Waiting for authentication...
+    ```
+  </Step>
+  
+  <Step title="Authorize in Your Browser">
+    Press Enter to open the URL automatically, or manually visit `https://sentry.io/device` in your browser. Enter the code shown in your terminal.
+  </Step>
+  
+  <Step title="Complete Authorization">
+    Follow the prompts in your browser to authorize the CLI. Once complete, you'll see:
+    
+    ```
+    ✓ Authenticated successfully
+      Logged in as: user@example.com (username)
+      Config saved to: ~/.sentry/config.db
+    ```
+  </Step>
+</Steps>
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+The OAuth flow uses a device code, so you don't need to copy tokens or expose credentials in your terminal.
 </Note>
+
+### API Token Authentication
+
+For CI/CD environments or non-interactive use, authenticate with an API token:
+
+```bash
+sentry auth login --token YOUR_API_TOKEN
+```
+
+You can create an API token in your Sentry account settings:
+1. Go to **Settings** → **Account** → **API** → **Auth Tokens**
+2. Click **Create New Token**
+3. Select the required scopes (at minimum: `org:read`, `project:read`, `event:read`)
+4. Copy the token and use it with the command above
+
+<Note>
+API tokens are stored securely in `~/.sentry/config.db` with file permissions set to 600 (owner read/write only).
+</Note>
+
+### Environment Variable Authentication
+
+For temporary authentication or CI/CD pipelines, use environment variables:
+
+```bash
+export SENTRY_AUTH_TOKEN=your_api_token
+sentry issue list
+```
+
+Sentry CLI checks for authentication in this order:
+1. `SENTRY_AUTH_TOKEN` environment variable
+2. `SENTRY_TOKEN` environment variable
+3. OAuth token stored in `~/.sentry/config.db`
+
+### Self-Hosted Sentry
+
+If you're using a self-hosted Sentry instance (version 26.1.0+), you'll need to configure the OAuth client:
+
+```bash
+export SENTRY_URL=https://sentry.your-company.com
+export SENTRY_CLIENT_ID=your_oauth_client_id
+sentry auth login
+```
+
+<Note>
+You must create a public OAuth application in **Settings** → **Developer Settings** on your self-hosted instance. For older Sentry versions, use `sentry auth login --token` instead.
+</Note>
+
+## Step 2: Verify Authentication
+
+Check that you're authenticated successfully:
+
+```bash
+sentry auth status
+```
+
+You should see output like:
+
+```
+✓ Authenticated
+  User: user@example.com (username)
+  Organizations: 3
+  Token expires: 2026-04-05 14:23:45 UTC
+```
+
+## Step 3: Explore Your Organizations and Projects
+
+List your organizations:
+
+```bash
+sentry org list
+```
+
+Example output:
+
+```
+Slug         Name              Projects
+my-company   My Company        12
+personal     Personal Projects 3
+```
+
+List projects in an organization:
+
+```bash
+sentry project list my-company
+```
+
+Example output:
+
+```
+Slug           Name              Platform    Issues
+frontend       Frontend App      javascript  45
+backend-api    Backend API       python      23
+mobile-app     Mobile App        react-native 12
+```
+
+<Note>
+You can also let Sentry CLI auto-detect your project from your codebase (see Step 4).
+</Note>
+
+## Step 4: Auto-Detect Your Project
+
+One of Sentry CLI's most powerful features is automatic project detection. Navigate to a project directory that contains Sentry configuration:
+
+```bash
+cd ~/my-project
+sentry issue list
+```
+
+Sentry CLI will:
+1. Search for Sentry DSN in `.env` files
+2. Scan source code files (JavaScript, Python, Go, Java, Ruby, PHP) for Sentry initialization
+3. Walk up the directory tree to find project boundaries
+4. Cache the detected project for fast subsequent access
+
+<Note>
+If your project can't be auto-detected, you can explicitly specify it: `sentry issue list my-company/my-project`
+</Note>
+
+## Step 5: List Issues
+
+View recent issues in your project:
+
+```bash
+sentry issue list
+```
+
+Example output:
+
+```
+ID          Status      Title                                    Events   First Seen
+PROJ-ABC    unresolved  TypeError: Cannot read property 'user'   1.2k     2 days ago
+PROJ-DEF    unresolved  ReferenceError: undefined variable       856      3 days ago
+PROJ-GHI    resolved    Network request timeout                  342      1 week ago
+```
+
+### Filter and Sort Issues
+
+```bash
+# Only unresolved issues
+sentry issue list --status unresolved
+
+# Limit to 10 results
+sentry issue list --limit 10
+
+# Issues from the last 24 hours
+sentry issue list --period 24h
+
+# Sort by frequency
+sentry issue list --sort freq
+```
+
+## Step 6: Get AI-Powered Insights
+
+Use Seer AI to get root cause analysis and fix recommendations:
+
+```bash
+# Get explanation of an issue
+sentry issue explain PROJ-ABC
+
+# Generate a fix plan
+sentry issue plan PROJ-ABC
+```
+
+Example output for `explain`:
+
+```
+🤖 Seer AI Analysis
+
+Root Cause:
+The error occurs when accessing the 'user' property of an object that is 
+undefined. This typically happens when:
+
+1. User session data hasn't loaded yet
+2. Authentication state is not properly initialized
+3. The user object is null due to logout or session expiration
+
+Key Observations:
+- Error happens during component render (line 47 in UserProfile.tsx)
+- Affects 15% of users, primarily on mobile devices
+- Spike in occurrences started 2 days ago after deployment
+
+Recommended Actions:
+1. Add null check before accessing user.email
+2. Implement loading state while user data is fetching
+3. Consider adding error boundary to gracefully handle auth failures
+```
+
+<Note>
+Seer AI features require Sentry Business or Enterprise plan with AI enabled for your organization.
+</Note>
+
+## Step 7: View Issue Details
+
+Get detailed information about a specific issue:
+
+```bash
+sentry issue view PROJ-ABC
+```
+
+Example output:
+
+```
+Title: TypeError: Cannot read property 'user'
+Status: unresolved
+Level: error
+Platform: javascript
+First Seen: 2 days ago
+Last Seen: 5 minutes ago
+
+Count: 1,234 events
+Users Affected: 156
+
+Stacktrace:
+  at UserProfile.render (UserProfile.tsx:47:23)
+  at renderComponent (react-dom.js:1234:45)
+  at updateComponent (react-dom.js:2345:12)
+
+Tags:
+  browser: Chrome 120
+  environment: production
+  release: v1.2.3
+
+URL: https://sentry.io/organizations/my-company/issues/12345/
+```
+
+### Open in Browser
+
+Use the `-w` flag to open any resource in your browser:
+
+```bash
+sentry issue view PROJ-ABC -w
+```
+
+## Step 8: View Event Details
+
+View a specific event within an issue:
+
+```bash
+sentry event view EVENT_ID
+```
+
+Events contain detailed information including:
+- Full stacktrace
+- Breadcrumbs (user actions leading to the error)
+- Context (device info, browser, OS)
+- Tags and custom metadata
+
+## Step 9: Export to JSON
+
+All commands support JSON output for scripting and automation:
+
+```bash
+# Export issues to JSON
+sentry issue list --json > issues.json
+
+# Export project list
+sentry project list --json | jq '.[] | select(.platform == "python")'
+
+# Pipe to other tools
+sentry issue list --json | jq -r '.[] | select(.status == "unresolved") | .id'
+```
+
+<Note>
+JSON output is perfect for integrating Sentry CLI with other tools, CI/CD pipelines, or custom scripts.
+</Note>
+
+## Step 10: Make Direct API Requests
+
+For advanced use cases, use the `api` command to make direct requests to the Sentry API:
+
+```bash
+# GET request
+sentry api /organizations/my-company/projects/
+
+# POST request with data
+sentry api POST /organizations/my-company/issues/ISSUE_ID/notes/ \
+  --data '{"text": "Investigating this issue"}'
+
+# Include headers
+sentry api /api/0/projects/my-company/my-project/events/ \
+  --header "X-Custom-Header: value"
+```
+
+## Common Workflows
+
+### Daily Issue Triage
+
+```bash
+# Check new unresolved issues from the last 24 hours
+sentry issue list --status unresolved --period 24h --sort date
+
+# Explain the top issue
+sentry issue explain PROJ-ABC
+
+# Open in browser for more details
+sentry issue view PROJ-ABC -w
+```
+
+### CI/CD Integration
+
+```bash
+#!/bin/bash
+# Check for new issues after deployment
+
+export SENTRY_AUTH_TOKEN=$CI_SENTRY_TOKEN
+
+ISSUES=$(sentry issue list --period 1h --status unresolved --json)
+COUNT=$(echo "$ISSUES" | jq length)
+
+if [ "$COUNT" -gt 10 ]; then
+  echo "⚠️  Warning: $COUNT new issues detected after deployment"
+  echo "$ISSUES" | jq -r '.[] | "\(.id): \(.title)"'
+  exit 1
+fi
+```
+
+### Monorepo Projects
+
+For monorepos with multiple Sentry projects:
+
+```bash
+# CLI auto-detects based on your current directory
+cd apps/frontend
+sentry issue list  # Lists frontend issues
+
+cd ../backend
+sentry issue list  # Lists backend issues
+
+# Or explicitly specify the project
+sentry issue list my-company/frontend
+sentry issue list my-company/backend
+```
+
+<Note>
+Sentry CLI generates short aliases for projects in monorepos, making it easier to switch between them.
+</Note>
+
+## Getting Help
+
+Get help for any command:
+
+```bash
+# General help
+sentry --help
+
+# Command-specific help
+sentry issue --help
+sentry issue list --help
+
+# View all available commands
+sentry help
+```
+
+## Configuration Files
+
+Sentry CLI stores configuration and cached data in `~/.sentry/`:
+
+- **config.db**: SQLite database containing:
+  - Authentication tokens (OAuth or API tokens)
+  - Cached project information
+  - Organization and region mappings
+  - Project aliases for monorepos
+  - User information
+
+You can override the config directory:
+
+```bash
+export SENTRY_CONFIG_DIR=/custom/path
+sentry auth login
+```
+
+## Logging and Debugging
+
+Enable debug logging to troubleshoot issues:
+
+```bash
+# Set log level
+export SENTRY_LOG_LEVEL=debug
+sentry issue list
+
+# Or use the --log-level flag
+sentry issue list --log-level debug
+
+# Verbose output for API commands
+sentry api /organizations/my-company/ --verbose
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/commands/auth/login">
+    Learn about all authentication commands and token management
+  </Card>
+  
+  <Card title="Issue Commands" icon="bug" href="/commands/issue/list">
+    Explore all issue management and debugging commands
+  </Card>
+  
+  <Card title="Project Commands" icon="folder" href="/commands/project/list">
+    Learn how to list, view, and manage projects
+  </Card>
+  
+  <Card title="API Access" icon="code" href="/commands/api">
+    Make direct API requests for advanced use cases
+  </Card>
+</CardGroup>

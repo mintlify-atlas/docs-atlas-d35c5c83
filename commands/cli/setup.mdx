@@ -1,0 +1,193 @@
+---
+title: sentry cli setup
+description: Configure shell integration for Sentry CLI
+---
+
+# sentry cli setup
+
+Configures shell integration for the Sentry CLI, including PATH modification, shell completions, and agent skills for AI coding assistants.
+
+## Usage
+
+```bash
+sentry cli setup [flags]
+```
+
+This command is called automatically by the install script, but can also be run manually after downloading the binary.
+
+## What It Does
+
+The setup command performs the following steps:
+
+1. **PATH Configuration** - Adds the binary directory to your shell's PATH (if not already present)
+2. **Shell Completions** - Installs tab completion scripts for your shell (bash, zsh, fish)
+3. **Agent Skills** - Installs skill files for AI coding assistants (e.g., Claude Code)
+4. **Installation Metadata** - Records installation method and version for upgrade functionality
+
+## Flags
+
+### Installation
+
+- `--install` - Install the binary from a temp location to the system path (used by install script)
+- `--method <method>` - Record installation method (`curl`, `npm`, `pnpm`, `bun`, `yarn`, `brew`)
+- `--channel <channel>` - Persist release channel (`stable` or `nightly`)
+
+### Configuration Control
+
+- `--no-modify-path` - Skip PATH modification
+- `--no-completions` - Skip shell completion installation
+- `--no-agent-skills` - Skip agent skill installation for AI coding assistants
+
+### Output
+
+- `--quiet` - Suppress output (for scripted usage)
+
+## Examples
+
+### Auto-detect and Configure
+
+```bash
+sentry cli setup
+```
+
+Detects your shell and configures everything automatically.
+
+### Record Install Method
+
+```bash
+sentry cli setup --method curl
+```
+
+Useful after a manual download to enable `sentry cli upgrade`.
+
+### Place Binary and Configure (Install Script Flow)
+
+```bash
+sentry cli setup --install --method curl --channel stable
+```
+
+Moves the binary from a temp location and configures the environment.
+
+### Skip PATH Modification
+
+```bash
+sentry cli setup --no-modify-path
+```
+
+Useful if you manage PATH manually or use a custom installation directory.
+
+### Skip Completions
+
+```bash
+sentry cli setup --no-completions
+```
+
+Skips shell completion installation (faster for CI/CD environments).
+
+### Skip Agent Skills
+
+```bash
+sentry cli setup --no-agent-skills
+```
+
+Skips AI coding assistant integration.
+
+### Quiet Mode (For Scripts)
+
+```bash
+sentry cli setup --quiet
+```
+
+Suppresses all output, useful for automated installation scripts.
+
+## Shell Support
+
+Setup automatically detects your shell and configures it appropriately:
+
+### Supported Shells (Completions)
+
+- **bash** - Installs to `~/.local/share/bash-completion/completions/sentry`
+- **zsh** - Installs to `~/.zsh/completions/_sentry` (may require fpath configuration)
+- **fish** - Installs to `~/.config/fish/completions/sentry.fish`
+
+### Unsupported Shells (Bash Fallback)
+
+For shells without native completion support (xonsh, nushell, etc.), setup installs bash completions as a fallback since many shells can load bash completion scripts.
+
+### Shell Config Files
+
+PATH modification is added to the appropriate config file:
+
+- **bash** - `~/.bashrc`
+- **zsh** - `~/.zshrc`
+- **fish** - `~/.config/fish/config.fish`
+
+## AI Agent Integration
+
+Setup automatically detects supported AI coding assistants and installs skill files:
+
+### Supported Agents
+
+- **Claude Code** - Installs to `~/.config/claude-code/plugins/sentry-cli/skill.md`
+
+Skill files are version-pinned to ensure the AI agent has accurate command reference for your installed version.
+
+## GitHub Actions Integration
+
+When running in GitHub Actions, setup automatically adds the binary directory to `$GITHUB_PATH`, making the CLI available to subsequent workflow steps without manual PATH modification.
+
+## Installation Metadata
+
+The `--method` flag records how you installed the CLI, which enables:
+
+- Automatic upgrade via `sentry cli upgrade` using the same method
+- Version checking against the appropriate package registry
+
+## Best-Effort Behavior
+
+All configuration steps after binary installation are best-effort:
+
+- Permission errors (e.g., root-owned config directories) produce warnings but don't fail the command
+- Failed steps are logged to stderr
+- The binary is functional even if post-install steps fail
+
+This is especially important for:
+- Homebrew post-install hooks (may run as root)
+- Restricted environments (CI/CD, containers)
+- Systems with custom directory permissions
+
+## Environment Variables
+
+### Read by Setup
+
+- `SHELL` - Detected shell type (e.g., `/bin/bash`, `/bin/zsh`)
+- `HOME` - User home directory
+- `XDG_CONFIG_HOME` - Config directory (falls back to `~/.config`)
+- `XDG_DATA_HOME` - Data directory (falls back to `~/.local/share`)
+- `PATH` - Current PATH (checked for existing binary location)
+- `GITHUB_PATH` - GitHub Actions PATH file (auto-detected)
+- `SENTRY_INSTALL_DIR` - Override install directory (advanced usage)
+
+### Set by Setup (GitHub Actions)
+
+- Appends to `$GITHUB_PATH` when running in GitHub Actions
+
+## Welcome Message
+
+On fresh install (not upgrades), setup displays a welcome message with quick-start commands:
+
+```
+Installed sentry v0.5.0 to /Users/you/.local/bin/sentry
+
+Get started:
+  sentry auth login  Authenticate with Sentry
+  sentry --help      See all available commands
+
+https://cli.sentry.dev
+```
+
+## Related Commands
+
+- [`sentry cli upgrade`](/commands/cli/upgrade) - Upgrade to the latest version
+- [`sentry auth login`](/commands/auth/login) - Authenticate with Sentry
+- [`sentry --help`](/commands/) - View all available commands

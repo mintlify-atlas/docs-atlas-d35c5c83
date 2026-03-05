@@ -1,0 +1,784 @@
+---
+title: Scripting & Automation
+description: Build automation scripts using Sentry CLI's JSON output and programmatic APIs
+---
+
+# Scripting & Automation
+
+Sentry CLI provides JSON output for all commands, making it easy to build automation scripts in any language.
+
+## JSON Output
+
+All list and view commands support the `--json` flag for machine-readable output.
+
+### Basic Usage
+
+```bash
+# Get JSON output
+sentry issue list my-org/my-project --json
+
+# Pipe to jq for filtering
+sentry issue list my-org/my-project --json | jq '.[] | select(.level == "error")'
+
+# Save to file
+sentry issue list my-org/my-project --json > issues.json
+```
+
+### JSON Schema
+
+Each command returns a consistent JSON structure:
+
+#### Issue List
+
+```json
+[
+  {
+    "id": "5844558609",
+    "shortId": "MYAPP-2J",
+    "title": "TypeError: Cannot read property 'map' of undefined",
+    "culprit": "app/components/Dashboard.tsx in render",
+    "permalink": "https://sentry.io/organizations/my-org/issues/5844558609/",
+    "level": "error",
+    "status": "unresolved",
+    "isUnhandled": true,
+    "count": 1243,
+    "userCount": 89,
+    "firstSeen": "2024-03-01T12:30:00Z",
+    "lastSeen": "2024-03-05T18:45:00Z",
+    "project": {
+      "id": "4505321021267968",
+      "slug": "my-project",
+      "platform": "javascript"
+    }
+  }
+]
+```
+
+#### Issue View
+
+```json
+{
+  "id": "5844558609",
+  "shortId": "MYAPP-2J",
+  "title": "TypeError: Cannot read property 'map' of undefined",
+  "metadata": {
+    "type": "TypeError",
+    "value": "Cannot read property 'map' of undefined",
+    "filename": "app/components/Dashboard.tsx",
+    "function": "render"
+  },
+  "tags": [
+    {"key": "environment", "value": "production"},
+    {"key": "browser", "value": "Chrome 122"}
+  ],
+  "latestEvent": {
+    "eventID": "a3c5e8f2b1d04e9f8c7b6a5d4c3e2f1a",
+    "message": "Cannot read property 'map' of undefined",
+    "platform": "javascript",
+    "timestamp": "2024-03-05T18:45:23.123Z"
+  }
+}
+```
+
+#### Project List
+
+```json
+[
+  {
+    "id": "4505321021267968",
+    "slug": "frontend",
+    "name": "Frontend App",
+    "platform": "javascript-react",
+    "status": "active",
+    "isBookmarked": false,
+    "isMember": true
+  }
+]
+```
+
+## Shell Scripts (Bash)
+
+### Issue Monitoring Script
+
+Monitor issues and send alerts when thresholds are exceeded:
+
+```bash monitor-issues.sh
+#!/bin/bash
+set -euo pipefail
+
+ORG="my-org"
+PROJECT="my-project"
+MAX_CRITICAL=5
+MAX_ERRORS=20
+
+# Ensure authentication
+if ! sentry auth status &>/dev/null; then
+    echo "Error: Not authenticated. Run 'sentry auth login'"
+    exit 1
+fi
+
+# Get unresolved critical issues
+CRITICAL=$(sentry issue list "$ORG/$PROJECT" \
+    --query "is:unresolved level:fatal" \
+    --json)
+
+CRITICAL_COUNT=$(echo "$CRITICAL" | jq 'length')
+
+# Get unresolved errors
+ERRORS=$(sentry issue list "$ORG/$PROJECT" \
+    --query "is:unresolved level:error" \
+    --json)
+
+ERROR_COUNT=$(echo "$ERRORS" | jq 'length')
+
+echo "Critical issues: $CRITICAL_COUNT"
+echo "Error issues: $ERROR_COUNT"
+
+# Alert if thresholds exceeded
+if [ "$CRITICAL_COUNT" -gt "$MAX_CRITICAL" ]; then
+    echo "⚠️  ALERT: $CRITICAL_COUNT critical issues (threshold: $MAX_CRITICAL)"
+    echo "$CRITICAL" | jq -r '.[] | "  - \(.title) (\(.shortId))"'
+    exit 1
+fi
+
+if [ "$ERROR_COUNT" -gt "$MAX_ERRORS" ]; then
+    echo "⚠️  WARNING: $ERROR_COUNT error issues (threshold: $MAX_ERRORS)"
+    echo "$ERRORS" | jq -r '.[] | "  - \(.title) (\(.shortId))"'
+    exit 1
+fi
+
+echo "✓ All checks passed"
+```
+
+Run the script:
+
+```bash
+chmod +x monitor-issues.sh
+./monitor-issues.sh
+```
+
+### Daily Report Generator
+
+Generate a daily issue summary report:
+
+```bash daily-report.sh
+#!/bin/bash
+set -euo pipefail
+
+ORG="my-org"
+PROJECT="my-project"
+REPORT_FILE="sentry-report-$(date +%Y-%m-%d).txt"
+
+echo "Sentry Daily Report - $(date +%Y-%m-%d)" > "$REPORT_FILE"
+echo "========================================" >> "$REPORT_FILE"
+echo "" >> "$REPORT_FILE"
+
+# Get issue stats
+ISSUES=$(sentry issue list "$ORG/$PROJECT" \
+    --period 24h \
+    --json)
+
+TOTAL=$(echo "$ISSUES" | jq 'length')
+CRITICAL=$(echo "$ISSUES" | jq '[.[] | select(.level == "fatal")] | length')
+ERRORS=$(echo "$ISSUES" | jq '[.[] | select(.level == "error")] | length')
+WARNINGS=$(echo "$ISSUES" | jq '[.[] | select(.level == "warning")] | length')
+
+cat >> "$REPORT_FILE" << EOF
+Summary (Last 24 hours)
+-----------------------
+Total Issues: $TOTAL
+Critical: $CRITICAL
+Errors: $ERRORS
+Warnings: $WARNINGS
+
+Top 5 Issues by Frequency
+-------------------------
+EOF
+
+echo "$ISSUES" | jq -r 'sort_by(.count) | reverse | limit(5; .[]) | "\(.count)x - \(.title) (\(.shortId))"' >> "$REPORT_FILE"
+
+cat >> "$REPORT_FILE" << EOF
+
+Top 5 Issues by User Impact
+---------------------------
+EOF
+
+echo "$ISSUES" | jq -r 'sort_by(.userCount) | reverse | limit(5; .[]) | "\(.userCount) users - \(.title) (\(.shortId))"' >> "$REPORT_FILE"
+
+echo "" >> "$REPORT_FILE"
+echo "Report generated: $(date)" >> "$REPORT_FILE"
+
+echo "Report saved to: $REPORT_FILE"
+cat "$REPORT_FILE"
+```
+
+### Multi-Project Status Check
+
+Check status across multiple projects:
+
+```bash check-all-projects.sh
+#!/bin/bash
+set -euo pipefail
+
+ORG="my-org"
+PROJECTS=("frontend" "backend" "mobile-app" "api")
+
+echo "Checking Sentry issues across all projects..."
+echo ""
+
+ALL_GOOD=true
+
+for PROJECT in "${PROJECTS[@]}"; do
+    echo "📦 $PROJECT"
+    
+    ISSUES=$(sentry issue list "$ORG/$PROJECT" \
+        --query "is:unresolved" \
+        --period 7d \
+        --json 2>/dev/null || echo "[]")
+    
+    ISSUE_COUNT=$(echo "$ISSUES" | jq 'length')
+    CRITICAL_COUNT=$(echo "$ISSUES" | jq '[.[] | select(.level == "fatal")] | length')
+    
+    if [ "$CRITICAL_COUNT" -gt 0 ]; then
+        echo "  ❌ $ISSUE_COUNT issues ($CRITICAL_COUNT critical)"
+        ALL_GOOD=false
+    elif [ "$ISSUE_COUNT" -gt 10 ]; then
+        echo "  ⚠️  $ISSUE_COUNT issues"
+    else
+        echo "  ✓ $ISSUE_COUNT issues"
+    fi
+    echo ""
+done
+
+if [ "$ALL_GOOD" = true ]; then
+    echo "✓ All projects healthy"
+    exit 0
+else
+    echo "❌ Some projects have critical issues"
+    exit 1
+fi
+```
+
+## Python Scripts
+
+### Issue Analyzer
+
+Analyze issue patterns and generate insights:
+
+```python analyze_issues.py
+#!/usr/bin/env python3
+import json
+import subprocess
+import sys
+from collections import Counter
+from datetime import datetime
+
+def get_issues(org, project, period="7d"):
+    """Fetch issues from Sentry CLI."""
+    cmd = [
+        "sentry", "issue", "list", f"{org}/{project}",
+        "--period", period,
+        "--limit", "100",
+        "--json"
+    ]
+    
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        print(f"Error: {result.stderr}", file=sys.stderr)
+        sys.exit(1)
+    
+    return json.loads(result.stdout)
+
+def analyze_patterns(issues):
+    """Analyze issue patterns."""
+    
+    # Count by level
+    levels = Counter(issue['level'] for issue in issues)
+    
+    # Count by platform
+    platforms = Counter(issue['project']['platform'] for issue in issues)
+    
+    # Find most frequent issues
+    by_frequency = sorted(issues, key=lambda x: x['count'], reverse=True)[:5]
+    
+    # Find issues affecting most users
+    by_users = sorted(issues, key=lambda x: x['userCount'], reverse=True)[:5]
+    
+    # Calculate total impact
+    total_events = sum(issue['count'] for issue in issues)
+    total_users = sum(issue['userCount'] for issue in issues)
+    
+    return {
+        'total_issues': len(issues),
+        'total_events': total_events,
+        'total_users': total_users,
+        'by_level': dict(levels),
+        'by_platform': dict(platforms),
+        'top_by_frequency': by_frequency,
+        'top_by_users': by_users
+    }
+
+def print_report(analysis):
+    """Print analysis report."""
+    print("Sentry Issue Analysis")
+    print("=" * 50)
+    print(f"Total Issues: {analysis['total_issues']}")
+    print(f"Total Events: {analysis['total_events']:,}")
+    print(f"Total Users Affected: {analysis['total_users']:,}")
+    print()
+    
+    print("Issues by Level:")
+    for level, count in analysis['by_level'].items():
+        print(f"  {level}: {count}")
+    print()
+    
+    print("Issues by Platform:")
+    for platform, count in analysis['by_platform'].items():
+        print(f"  {platform}: {count}")
+    print()
+    
+    print("Top 5 by Frequency:")
+    for i, issue in enumerate(analysis['top_by_frequency'], 1):
+        print(f"  {i}. {issue['count']:,}x - {issue['title']}")
+        print(f"     {issue['shortId']} | {issue['permalink']}")
+    print()
+    
+    print("Top 5 by User Impact:")
+    for i, issue in enumerate(analysis['top_by_users'], 1):
+        print(f"  {i}. {issue['userCount']:,} users - {issue['title']}")
+        print(f"     {issue['shortId']} | {issue['permalink']}")
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("Usage: python analyze_issues.py <org> <project> [period]")
+        sys.exit(1)
+    
+    org = sys.argv[1]
+    project = sys.argv[2]
+    period = sys.argv[3] if len(sys.argv) > 3 else "7d"
+    
+    print(f"Fetching issues for {org}/{project} (last {period})...\n")
+    
+    issues = get_issues(org, project, period)
+    analysis = analyze_patterns(issues)
+    print_report(analysis)
+```
+
+Run the script:
+
+```bash
+python3 analyze_issues.py my-org my-project 7d
+```
+
+### Automated Triage
+
+Automatically categorize and prioritize issues:
+
+```python triage_issues.py
+#!/usr/bin/env python3
+import json
+import subprocess
+import sys
+
+def get_issues(org, project):
+    """Fetch unresolved issues."""
+    cmd = [
+        "sentry", "issue", "list", f"{org}/{project}",
+        "--query", "is:unresolved",
+        "--json"
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    return json.loads(result.stdout)
+
+def calculate_priority(issue):
+    """Calculate issue priority score."""
+    score = 0
+    
+    # Level weight
+    level_weights = {'fatal': 100, 'error': 50, 'warning': 10, 'info': 1}
+    score += level_weights.get(issue['level'], 0)
+    
+    # Frequency weight (logarithmic scale)
+    import math
+    if issue['count'] > 0:
+        score += math.log10(issue['count']) * 10
+    
+    # User impact weight
+    if issue['userCount'] > 0:
+        score += math.log10(issue['userCount']) * 20
+    
+    # Unhandled exceptions get higher priority
+    if issue.get('isUnhandled'):
+        score += 30
+    
+    return score
+
+def triage(issues):
+    """Triage issues into priority buckets."""
+    critical = []
+    high = []
+    medium = []
+    low = []
+    
+    for issue in issues:
+        priority = calculate_priority(issue)
+        issue['priority_score'] = priority
+        
+        if priority >= 100:
+            critical.append(issue)
+        elif priority >= 50:
+            high.append(issue)
+        elif priority >= 20:
+            medium.append(issue)
+        else:
+            low.append(issue)
+    
+    return {
+        'critical': sorted(critical, key=lambda x: x['priority_score'], reverse=True),
+        'high': sorted(high, key=lambda x: x['priority_score'], reverse=True),
+        'medium': sorted(medium, key=lambda x: x['priority_score'], reverse=True),
+        'low': sorted(low, key=lambda x: x['priority_score'], reverse=True)
+    }
+
+def print_triage_report(triaged):
+    """Print triage report."""
+    print("Issue Triage Report")
+    print("=" * 70)
+    
+    for priority, issues in triaged.items():
+        if not issues:
+            continue
+        
+        emoji = {'critical': '🔴', 'high': '🟠', 'medium': '🟡', 'low': '🟢'}[priority]
+        print(f"\n{emoji} {priority.upper()} Priority ({len(issues)} issues)")
+        print("-" * 70)
+        
+        for issue in issues[:10]:  # Show top 10 per category
+            print(f"  [{issue['priority_score']:.1f}] {issue['shortId']} - {issue['title'][:60]}")
+            print(f"      {issue['count']:,} events | {issue['userCount']:,} users | {issue['level']}")
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("Usage: python triage_issues.py <org> <project>")
+        sys.exit(1)
+    
+    org = sys.argv[1]
+    project = sys.argv[2]
+    
+    print(f"Fetching and triaging issues for {org}/{project}...\n")
+    
+    issues = get_issues(org, project)
+    triaged = triage(issues)
+    print_triage_report(triaged)
+```
+
+## Node.js Scripts
+
+### Issue Dashboard
+
+Build a simple CLI dashboard:
+
+```javascript dashboard.js
+#!/usr/bin/env node
+const { execSync } = require('child_process');
+
+function getSentryData(org, project, query = '') {
+  const cmd = query
+    ? `sentry issue list ${org}/${project} --query "${query}" --json`
+    : `sentry issue list ${org}/${project} --json`;
+  
+  const output = execSync(cmd, { encoding: 'utf-8' });
+  return JSON.parse(output);
+}
+
+function groupByLevel(issues) {
+  return issues.reduce((acc, issue) => {
+    acc[issue.level] = (acc[issue.level] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function displayDashboard(org, project) {
+  console.log('\n╔════════════════════════════════════════════════════════╗');
+  console.log(`║          Sentry Dashboard: ${org}/${project}          ║`);
+  console.log('╚════════════════════════════════════════════════════════╝\n');
+  
+  // Get issues from last 24 hours
+  const issues = getSentryData(org, project);
+  const byLevel = groupByLevel(issues);
+  
+  const totalEvents = issues.reduce((sum, i) => sum + i.count, 0);
+  const totalUsers = issues.reduce((sum, i) => sum + i.userCount, 0);
+  
+  console.log('📊 Overview');
+  console.log(`   Total Issues: ${issues.length}`);
+  console.log(`   Total Events: ${totalEvents.toLocaleString()}`);
+  console.log(`   Users Affected: ${totalUsers.toLocaleString()}`);
+  console.log();
+  
+  console.log('📈 By Severity');
+  const levels = { fatal: '🔴', error: '🟠', warning: '🟡', info: '🔵' };
+  for (const [level, emoji] of Object.entries(levels)) {
+    const count = byLevel[level] || 0;
+    if (count > 0) {
+      console.log(`   ${emoji} ${level}: ${count}`);
+    }
+  }
+  console.log();
+  
+  // Top 5 issues
+  console.log('🔥 Top Issues by Frequency');
+  const topIssues = issues
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5);
+  
+  topIssues.forEach((issue, i) => {
+    console.log(`   ${i + 1}. ${issue.count.toLocaleString()}x - ${issue.title.slice(0, 50)}`);
+    console.log(`      ${issue.shortId} | ${issue.level}`);
+  });
+  
+  console.log();
+}
+
+if (require.main === module) {
+  const [org, project] = process.argv.slice(2);
+  
+  if (!org || !project) {
+    console.error('Usage: node dashboard.js <org> <project>');
+    process.exit(1);
+  }
+  
+  displayDashboard(org, project);
+}
+```
+
+Run the script:
+
+```bash
+node dashboard.js my-org my-project
+```
+
+### Slack Integration
+
+Send issue alerts to Slack:
+
+```javascript slack-alert.js
+#!/usr/bin/env node
+const { execSync } = require('child_process');
+const https = require('https');
+
+const SLACK_WEBHOOK = process.env.SLACK_WEBHOOK_URL;
+const ORG = 'my-org';
+const PROJECT = 'my-project';
+const THRESHOLD = 5;
+
+function getIssues() {
+  const cmd = `sentry issue list ${ORG}/${PROJECT} --query "is:unresolved level:error" --json`;
+  const output = execSync(cmd, { encoding: 'utf-8' });
+  return JSON.parse(output);
+}
+
+function sendSlackAlert(issues) {
+  const message = {
+    text: `⚠️ Sentry Alert: ${issues.length} unresolved errors in ${ORG}/${PROJECT}`,
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: '🚨 Sentry Alert'
+        }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${issues.length} unresolved errors* in *${ORG}/${PROJECT}*`
+        }
+      },
+      {
+        type: 'divider'
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: issues.slice(0, 5).map(issue => 
+            `• <${issue.permalink}|${issue.shortId}>: ${issue.title}\n  _${issue.count} events, ${issue.userCount} users_`
+          ).join('\n\n')
+        }
+      }
+    ]
+  };
+  
+  const data = JSON.stringify(message);
+  const url = new URL(SLACK_WEBHOOK);
+  
+  const options = {
+    hostname: url.hostname,
+    path: url.pathname,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': data.length
+    }
+  };
+  
+  const req = https.request(options, (res) => {
+    console.log(`Slack notification sent: ${res.statusCode}`);
+  });
+  
+  req.on('error', (error) => {
+    console.error('Error sending Slack notification:', error);
+  });
+  
+  req.write(data);
+  req.end();
+}
+
+if (!SLACK_WEBHOOK) {
+  console.error('Error: SLACK_WEBHOOK_URL environment variable not set');
+  process.exit(1);
+}
+
+const issues = getIssues();
+
+if (issues.length >= THRESHOLD) {
+  console.log(`Alert: ${issues.length} issues exceed threshold of ${THRESHOLD}`);
+  sendSlackAlert(issues);
+} else {
+  console.log(`OK: ${issues.length} issues (threshold: ${THRESHOLD})`);
+}
+```
+
+## jq Recipes
+
+Powerful one-liners using `jq` to process JSON output:
+
+### Filter by Criteria
+
+```bash
+# Only fatal errors
+sentry issue list my-org/my-project --json | jq '.[] | select(.level == "fatal")'
+
+# Issues with >100 events
+sentry issue list my-org/my-project --json | jq '.[] | select(.count > 100)'
+
+# Issues affecting >50 users
+sentry issue list my-org/my-project --json | jq '.[] | select(.userCount > 50)'
+
+# Unhandled exceptions
+sentry issue list my-org/my-project --json | jq '.[] | select(.isUnhandled == true)'
+```
+
+### Extract Specific Fields
+
+```bash
+# Get issue IDs and titles
+sentry issue list my-org/my-project --json | jq -r '.[] | "\(.shortId): \(.title)"'
+
+# Get permalinks
+sentry issue list my-org/my-project --json | jq -r '.[].permalink'
+
+# Count by level
+sentry issue list my-org/my-project --json | jq 'group_by(.level) | map({level: .[0].level, count: length})'
+```
+
+### Sort and Limit
+
+```bash
+# Top 10 by frequency
+sentry issue list my-org/my-project --json | jq 'sort_by(.count) | reverse | limit(10; .[])'
+
+# Top 10 by user impact
+sentry issue list my-org/my-project --json | jq 'sort_by(.userCount) | reverse | limit(10; .[])'
+```
+
+### Aggregate Statistics
+
+```bash
+# Total event count
+sentry issue list my-org/my-project --json | jq '[.[].count] | add'
+
+# Total affected users
+sentry issue list my-org/my-project --json | jq '[.[].userCount] | add'
+
+# Average events per issue
+sentry issue list my-org/my-project --json | jq '[.[].count] | (add / length)'
+```
+
+### CSV Export
+
+```bash
+# Export to CSV
+sentry issue list my-org/my-project --json | jq -r '(["ID","Title","Level","Count","Users"] | @csv), (.[] | [.shortId, .title, .level, .count, .userCount] | @csv)' > issues.csv
+```
+
+## Best Practices
+
+### 1. Error Handling
+
+Always check command exit codes:
+
+```bash
+if ! sentry issue list my-org/my-project --json > issues.json; then
+    echo "Error fetching issues" >&2
+    exit 1
+fi
+```
+
+### 2. Rate Limiting
+
+Implement exponential backoff:
+
+```python
+import time
+import subprocess
+
+def retry_with_backoff(cmd, max_retries=3):
+    for i in range(max_retries):
+        try:
+            return subprocess.check_output(cmd, text=True)
+        except subprocess.CalledProcessError:
+            if i < max_retries - 1:
+                wait = 2 ** i
+                time.sleep(wait)
+            else:
+                raise
+```
+
+### 3. Caching Results
+
+Cache API responses to reduce load:
+
+```bash
+CACHE_FILE="/tmp/sentry-issues-cache.json"
+CACHE_TTL=300  # 5 minutes
+
+if [ -f "$CACHE_FILE" ] && [ $(($(date +%s) - $(stat -f %m "$CACHE_FILE"))) -lt $CACHE_TTL ]; then
+    cat "$CACHE_FILE"
+else
+    sentry issue list my-org/my-project --json | tee "$CACHE_FILE"
+fi
+```
+
+### 4. Logging
+
+Log script execution for debugging:
+
+```bash
+LOG_FILE="sentry-script.log"
+echo "[$(date)] Starting script" >> "$LOG_FILE"
+sentry issue list my-org/my-project --json 2>> "$LOG_FILE"
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CI/CD Integration" icon="gears" href="/advanced/ci-cd">
+    Integrate into GitHub Actions, GitLab CI, and more
+  </Card>
+  <Card title="AI Agents" icon="robot" href="/advanced/ai-agents">
+    Use with AI coding assistants like Cursor and Claude
+  </Card>
+</CardGroup>

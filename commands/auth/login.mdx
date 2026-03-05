@@ -1,0 +1,84 @@
+---
+title: sentry auth login
+description: Authenticate with Sentry using OAuth or an API token
+---
+
+Authenticate with Sentry using OAuth device flow or an API token.
+
+## Usage
+
+```bash
+sentry auth login [options]
+```
+
+## Description
+
+Log in to Sentry using OAuth or an API token. The OAuth flow uses a device code - you'll be given a code to enter at a URL. Alternatively, use `--token` to authenticate with an existing API token.
+
+The command will:
+- Check if you're already authenticated (and skip if so)
+- Start an OAuth device flow (default) or validate the provided token
+- Fetch and cache your user information
+- Save credentials to your local configuration file
+
+<Note>
+  If authentication is provided via environment variable (`SENTRY_AUTH_TOKEN` or `SENTRY_TOKEN`), you'll need to unset it to use OAuth-based login instead.
+</Note>
+
+## Options
+
+<ParamField path="--token" type="string">
+  Authenticate using an API token instead of OAuth. The token will be validated by fetching user regions from the Sentry API.
+</ParamField>
+
+<ParamField path="--timeout" type="number" default="900">
+  Timeout for OAuth flow in seconds. The default is 900 seconds (15 minutes).
+</ParamField>
+
+## Examples
+
+### OAuth login (default)
+
+```bash
+sentry auth login
+```
+
+Expected output:
+```
+Please visit: https://sentry.io/activate/DEVICE-CODE
+Enter code: ABCD-EFGH
+
+Waiting for authorization...
+✓ Authenticated successfully
+  Logged in as: user@example.com
+  Config saved to: ~/.sentry/config.db
+```
+
+### Login with API token
+
+```bash
+sentry auth login --token sntrys_YOUR_TOKEN_HERE
+```
+
+Expected output:
+```
+✓ Authenticated with API token
+  Logged in as: user@example.com (username)
+  Config saved to: ~/.sentry/config.db
+```
+
+### OAuth with custom timeout
+
+```bash
+sentry auth login --timeout 300
+```
+
+<Tip>
+  For self-hosted Sentry instances (26.1.0+), set `SENTRY_URL` and `SENTRY_CLIENT_ID` environment variables before running the login command. You'll need to create a public OAuth app in Settings → Developer Settings.
+</Tip>
+
+## Related Commands
+
+- [`sentry auth logout`](/commands/auth/logout) - Log out and remove stored credentials
+- [`sentry auth status`](/commands/auth/status) - View authentication status and verify credentials
+- [`sentry auth whoami`](/commands/auth/whoami) - Show the currently authenticated user

@@ -1,0 +1,647 @@
+---
+title: AI Agent Integration
+description: Integrate Sentry CLI with AI coding agents like Cursor, Claude, and other AI assistants
+---
+
+# AI Agent Integration
+
+Sentry CLI is designed to work seamlessly with AI coding agents, providing structured JSON output and predictable behavior for automated debugging workflows.
+
+## Overview
+
+AI agents can use Sentry CLI to:
+
+- **Fetch issue details** for debugging context
+- **Analyze error patterns** across projects
+- **Get AI-powered explanations** via Sentry's Seer AI
+- **Generate fix plans** for common errors
+- **Monitor deployment health** automatically
+
+## Agent Skills
+
+Sentry CLI provides a **skill file** for AI agents that documents all commands, flags, and JSON output schemas.
+
+### Installation
+
+The skill file is automatically installed when you set up Sentry CLI:
+
+<Steps>
+  <Step title="Install Sentry CLI">
+    ```bash
+    curl https://cli.sentry.dev/install -fsS | bash
+    ```
+  </Step>
+  
+  <Step title="Run Setup">
+    ```bash
+    sentry cli setup
+    ```
+    
+    This automatically installs agent skills to:
+    - **Claude Desktop**: `~/.config/claude/skills/sentry-cli/SKILL.md`
+  </Step>
+  
+  <Step title="Verify Installation">
+    Check if the skill file exists:
+    
+    ```bash
+    ls ~/.config/claude/skills/sentry-cli/SKILL.md
+    ```
+  </Step>
+</Steps>
+
+### Manual Installation
+
+If auto-detection doesn't work, manually copy the skill file:
+
+```bash
+# Claude Desktop
+mkdir -p ~/.config/claude/skills/sentry-cli
+cp ~/.sentry/skills/sentry-cli/SKILL.md ~/.config/claude/skills/sentry-cli/
+```
+
+### Skill File Contents
+
+The skill file (`SKILL.md`) contains:
+
+- Complete command reference with all flags
+- JSON output schemas for every command
+- Authentication patterns
+- Usage examples and best practices
+- Error handling guidance
+
+## Supported AI Agents
+
+### Claude Desktop
+
+Claude Desktop (Sonnet, Opus) supports the Sentry CLI skill natively.
+
+**Setup:**
+
+<Steps>
+  <Step title="Install Sentry CLI">
+    ```bash
+    curl https://cli.sentry.dev/install -fsS | bash
+    sentry cli setup
+    ```
+  </Step>
+  
+  <Step title="Authenticate">
+    ```bash
+    sentry auth login
+    ```
+  </Step>
+  
+  <Step title="Use in Claude">
+    Ask Claude to help with Sentry issues:
+    
+    > "Fetch the top 5 unresolved errors from my-org/my-project and explain the most frequent one"
+  </Step>
+</Steps>
+
+**Example Prompts:**
+
+- "Show me all critical issues in production from the last 24 hours"
+- "Analyze the top 3 issues by user impact and suggest fixes"
+- "Get the AI explanation for issue MYAPP-2J"
+- "List all unresolved TypeError issues"
+
+### Cursor
+
+Cursor can use Sentry CLI via terminal commands in its agent mode.
+
+**Setup:**
+
+1. Install Sentry CLI globally
+2. Authenticate with `sentry auth login`
+3. Use Cursor's terminal integration:
+
+```
+Cmd+K → "Run: sentry issue list my-org/my-project --json"
+```
+
+**Cursor Rules:**
+
+Add to `.cursorrules` in your project:
+
+```markdown .cursorrules
+# Sentry CLI Integration
+
+When debugging errors or analyzing issues:
+
+1. Use `sentry issue list <org>/<project> --json` to fetch issues
+2. Parse JSON output to extract relevant details
+3. Use `sentry issue explain <issue-id>` for AI-powered analysis
+4. Use `sentry issue plan <issue-id>` for suggested fixes
+
+## Common Commands
+
+- List unresolved errors: `sentry issue list my-org/my-project --query "is:unresolved level:error" --json`
+- Get issue details: `sentry issue view <issue-id> --json`
+- Explain with AI: `sentry issue explain <issue-id>`
+```
+
+### GitHub Copilot
+
+GitHub Copilot can suggest Sentry CLI commands when you add comments:
+
+```javascript
+// Fetch unresolved issues from Sentry
+// sentry issue list my-org/my-project --query "is:unresolved" --json
+```
+
+Copilot will suggest code to parse the JSON output.
+
+### Custom Agents
+
+Build custom agents using the Sentry CLI as a tool:
+
+```python
+import subprocess
+import json
+
+class SentryAgent:
+    def __init__(self, org, project):
+        self.org = org
+        self.project = project
+    
+    def get_issues(self, query="", limit=25):
+        """Fetch issues with optional query filter."""
+        cmd = [
+            "sentry", "issue", "list", f"{self.org}/{self.project}",
+            "--limit", str(limit),
+            "--json"
+        ]
+        if query:
+            cmd.extend(["--query", query])
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        return json.loads(result.stdout)
+    
+    def explain_issue(self, issue_id):
+        """Get AI explanation for an issue."""
+        cmd = ["sentry", "issue", "explain", issue_id, "--json"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        return json.loads(result.stdout)
+    
+    def get_fix_plan(self, issue_id):
+        """Get AI-generated fix plan."""
+        cmd = ["sentry", "issue", "plan", issue_id, "--json"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        return json.loads(result.stdout)
+
+# Usage
+agent = SentryAgent("my-org", "my-project")
+issues = agent.get_issues(query="is:unresolved level:error")
+
+for issue in issues[:5]:
+    print(f"Issue: {issue['title']}")
+    explanation = agent.explain_issue(issue['shortId'])
+    print(f"Explanation: {explanation}")
+```
+
+## JSON Output for Agents
+
+All Sentry CLI commands support `--json` for structured output.
+
+### Issue List
+
+```bash
+sentry issue list my-org/my-project --json
+```
+
+**Output Schema:**
+
+```json
+[
+  {
+    "id": "5844558609",
+    "shortId": "MYAPP-2J",
+    "title": "TypeError: Cannot read property 'map' of undefined",
+    "culprit": "app/components/Dashboard.tsx in render",
+    "permalink": "https://sentry.io/organizations/my-org/issues/5844558609/",
+    "level": "error",
+    "status": "unresolved",
+    "isUnhandled": true,
+    "count": 1243,
+    "userCount": 89,
+    "firstSeen": "2024-03-01T12:30:00Z",
+    "lastSeen": "2024-03-05T18:45:00Z",
+    "project": {
+      "id": "4505321021267968",
+      "slug": "my-project",
+      "platform": "javascript"
+    }
+  }
+]
+```
+
+### Issue View
+
+```bash
+sentry issue view MYAPP-2J --json
+```
+
+**Output Schema:**
+
+```json
+{
+  "id": "5844558609",
+  "shortId": "MYAPP-2J",
+  "title": "TypeError: Cannot read property 'map' of undefined",
+  "metadata": {
+    "type": "TypeError",
+    "value": "Cannot read property 'map' of undefined",
+    "filename": "app/components/Dashboard.tsx",
+    "function": "render"
+  },
+  "tags": [
+    {"key": "environment", "value": "production"},
+    {"key": "browser", "value": "Chrome 122"}
+  ],
+  "latestEvent": {
+    "eventID": "a3c5e8f2b1d04e9f8c7b6a5d4c3e2f1a",
+    "message": "Cannot read property 'map' of undefined",
+    "platform": "javascript",
+    "timestamp": "2024-03-05T18:45:23.123Z"
+  }
+}
+```
+
+### AI Explanation
+
+```bash
+sentry issue explain MYAPP-2J --json
+```
+
+**Output Schema:**
+
+```json
+{
+  "issueId": "5844558609",
+  "analysis": {
+    "summary": "This TypeError occurs when trying to call .map() on an undefined value in the Dashboard component's render method.",
+    "rootCause": "The 'items' prop is undefined when the component renders, likely due to asynchronous data loading or missing prop validation.",
+    "suggestedFix": "Add defensive checks before calling .map(), or use optional chaining: items?.map(...)",
+    "affectedCode": "app/components/Dashboard.tsx:42"
+  }
+}
+```
+
+### Fix Plan
+
+```bash
+sentry issue plan MYAPP-2J --json
+```
+
+**Output Schema:**
+
+```json
+{
+  "issueId": "5844558609",
+  "plan": {
+    "steps": [
+      {
+        "step": 1,
+        "action": "Add null check before map call",
+        "code": "const items = props.items || [];",
+        "file": "app/components/Dashboard.tsx",
+        "line": 42
+      },
+      {
+        "step": 2,
+        "action": "Add PropTypes validation",
+        "code": "Dashboard.propTypes = { items: PropTypes.array.isRequired };",
+        "file": "app/components/Dashboard.tsx",
+        "line": 60
+      }
+    ],
+    "confidence": 0.92
+  }
+}
+```
+
+## Authentication for Agents
+
+AI agents need authentication to access Sentry data.
+
+### Environment Variable
+
+The simplest method for agents is using `SENTRY_AUTH_TOKEN`:
+
+<Steps>
+  <Step title="Create Auth Token">
+    Go to **Settings → Account → API → Auth Tokens** in Sentry
+  </Step>
+  
+  <Step title="Set Environment Variable">
+    ```bash
+    export SENTRY_AUTH_TOKEN=sntrys_abc123...
+    ```
+    
+    Add to your shell profile (`~/.bashrc`, `~/.zshrc`) for persistence
+  </Step>
+  
+  <Step title="Test">
+    ```bash
+    sentry auth status
+    ```
+  </Step>
+</Steps>
+
+### OAuth (Interactive)
+
+For interactive sessions, use OAuth:
+
+```bash
+sentry auth login
+```
+
+The token is stored in `~/.sentry/config.db` and automatically used by agents.
+
+## Agent Workflows
+
+### 1. Automated Debugging
+
+Agent fetches issue, gets explanation, suggests fix:
+
+```bash
+# Step 1: Get most frequent issue
+ISSUE_ID=$(sentry issue list my-org/my-project \
+  --sort freq \
+  --limit 1 \
+  --json | jq -r '.[0].shortId')
+
+# Step 2: Get AI explanation
+sentry issue explain $ISSUE_ID --json > explanation.json
+
+# Step 3: Get fix plan
+sentry issue plan $ISSUE_ID --json > plan.json
+
+# Step 4: Agent generates PR with fix
+```
+
+### 2. Error Pattern Analysis
+
+Agent identifies patterns across issues:
+
+```bash
+# Get all unresolved errors
+sentry issue list my-org/my-project \
+  --query "is:unresolved level:error" \
+  --json > errors.json
+
+# Agent analyzes patterns:
+# - Common error types
+# - Affected files
+# - Frequency trends
+```
+
+### 3. Deployment Health Check
+
+Agent verifies deployment health:
+
+```bash
+# Check for new issues after deployment
+NEW_ISSUES=$(sentry issue list my-org/my-project \
+  --period 30m \
+  --json)
+
+COUNT=$(echo "$NEW_ISSUES" | jq 'length')
+
+if [ "$COUNT" -gt 5 ]; then
+  echo "⚠️  $COUNT new issues detected after deployment"
+  # Agent can trigger rollback
+fi
+```
+
+### 4. Code Review Assistant
+
+Agent checks if PR fixes known issues:
+
+```bash
+# Get changed files from PR
+CHANGED_FILES=$(git diff --name-only main...HEAD)
+
+# Get issues affecting those files
+for FILE in $CHANGED_FILES; do
+  sentry issue list my-org/my-project \
+    --query "is:unresolved" \
+    --json | jq --arg file "$FILE" '.[] | select(.metadata.filename == $file)'
+done
+```
+
+## Best Practices
+
+### 1. Use JSON Output Always
+
+Agents should always parse JSON:
+
+```bash
+sentry issue list my-org/my-project --json | jq '.'
+```
+
+Never parse human-readable output.
+
+### 2. Handle Errors Gracefully
+
+Check exit codes:
+
+```python
+result = subprocess.run(cmd, capture_output=True, text=True)
+if result.returncode != 0:
+    print(f"Error: {result.stderr}")
+    return None
+```
+
+### 3. Rate Limiting
+
+Implement backoff for rate limits:
+
+```python
+import time
+
+def fetch_with_retry(cmd, max_retries=3):
+    for i in range(max_retries):
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode == 0:
+            return result.stdout
+        time.sleep(2 ** i)  # Exponential backoff
+    raise Exception("Max retries exceeded")
+```
+
+### 4. Cache Results
+
+Avoid redundant API calls:
+
+```python
+import json
+import os
+import time
+
+CACHE_DIR = "/tmp/sentry-cache"
+CACHE_TTL = 300  # 5 minutes
+
+def get_cached_or_fetch(org, project):
+    cache_file = f"{CACHE_DIR}/{org}-{project}.json"
+    
+    if os.path.exists(cache_file):
+        age = time.time() - os.path.getmtime(cache_file)
+        if age < CACHE_TTL:
+            with open(cache_file) as f:
+                return json.load(f)
+    
+    # Fetch fresh data
+    data = fetch_issues(org, project)
+    
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    with open(cache_file, 'w') as f:
+        json.dump(data, f)
+    
+    return data
+```
+
+### 5. Limit Scope
+
+Use filters to reduce data:
+
+```bash
+# Only fetch what you need
+sentry issue list my-org/my-project \
+  --query "is:unresolved level:error" \
+  --limit 10 \
+  --json
+```
+
+## Example Agent Implementations
+
+### Claude Desktop Agent
+
+**Prompt:**
+
+> "You are a debugging assistant with access to Sentry CLI. When I ask about errors:
+> 
+> 1. Use `sentry issue list` to fetch relevant issues
+> 2. Parse JSON output to analyze patterns
+> 3. Use `sentry issue explain` for AI explanations
+> 4. Use `sentry issue plan` for fix suggestions
+> 5. Provide code examples for fixes
+> 
+> Always use `--json` flag and parse with `jq`."
+
+### Python Agent
+
+```python debugging_agent.py
+import subprocess
+import json
+import sys
+
+class DebuggingAgent:
+    def __init__(self, org, project):
+        self.org = org
+        self.project = project
+    
+    def run_command(self, cmd):
+        """Run a Sentry CLI command and return JSON output."""
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception(f"Command failed: {result.stderr}")
+        return json.loads(result.stdout)
+    
+    def analyze_errors(self):
+        """Analyze recent errors and suggest fixes."""
+        print("Fetching unresolved errors...\n")
+        
+        issues = self.run_command([
+            "sentry", "issue", "list", f"{self.org}/{self.project}",
+            "--query", "is:unresolved level:error",
+            "--sort", "freq",
+            "--limit", "5",
+            "--json"
+        ])
+        
+        for i, issue in enumerate(issues, 1):
+            print(f"{i}. {issue['title']}")
+            print(f"   {issue['count']} events | {issue['userCount']} users")
+            print(f"   {issue['shortId']} | {issue['permalink']}")
+            
+            # Get AI explanation
+            try:
+                explanation = self.run_command([
+                    "sentry", "issue", "explain", issue['shortId'], "--json"
+                ])
+                print(f"   💡 {explanation['analysis']['summary']}")
+            except:
+                print("   ⚠️  AI explanation not available")
+            
+            print()
+    
+    def suggest_fix(self, issue_id):
+        """Get AI-generated fix plan for an issue."""
+        plan = self.run_command([
+            "sentry", "issue", "plan", issue_id, "--json"
+        ])
+        
+        print(f"Fix Plan for {issue_id}:\n")
+        for step in plan['plan']['steps']:
+            print(f"Step {step['step']}: {step['action']}")
+            print(f"  File: {step['file']}:{step['line']}")
+            print(f"  Code: {step['code']}")
+            print()
+
+if __name__ == "__main__":
+    agent = DebuggingAgent("my-org", "my-project")
+    agent.analyze_errors()
+```
+
+## Troubleshooting
+
+### Skill File Not Found
+
+If your agent can't find the skill file:
+
+```bash
+# Check if installed
+ls ~/.config/claude/skills/sentry-cli/SKILL.md
+
+# Reinstall
+sentry cli setup --no-modify-path
+```
+
+### Authentication Issues
+
+If agent commands fail with auth errors:
+
+```bash
+# Check authentication
+sentry auth status
+
+# Re-authenticate
+sentry auth login
+
+# Or use env var
+export SENTRY_AUTH_TOKEN=your-token
+```
+
+### JSON Parsing Errors
+
+If JSON output is invalid:
+
+```bash
+# Ensure you're using --json flag
+sentry issue list my-org/my-project --json | jq '.'
+
+# Check for stderr mixed with stdout
+sentry issue list my-org/my-project --json 2>/dev/null
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="CI/CD Integration" icon="gears" href="/advanced/ci-cd">
+    Automate Sentry checks in your pipeline
+  </Card>
+  <Card title="Scripting Guide" icon="code" href="/advanced/scripting">
+    Build custom automation scripts
+  </Card>
+</CardGroup>

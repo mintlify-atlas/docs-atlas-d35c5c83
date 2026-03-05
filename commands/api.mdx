@@ -1,0 +1,137 @@
+---
+title: sentry api
+description: Make authenticated API requests to Sentry
+---
+
+# sentry api
+
+Make raw authenticated API requests to the Sentry API. Similar to `gh api` for GitHub.
+
+## Usage
+
+```bash
+sentry api <endpoint> [flags]
+```
+
+The endpoint is relative to `/api/0/` (do not include the prefix). Authentication is handled automatically using your stored credentials.
+
+## Arguments
+
+- **endpoint** (required) - API endpoint relative to `/api/0/` (e.g., `organizations/`, `issues/123/`)
+
+## Flags
+
+### Request Method
+
+- `-X, --method <method>` - HTTP method for the request (default: `GET`)
+  - Valid methods: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`
+
+### Request Body Options
+
+**Choose one** of the following:
+
+- `-d, --data <json>` - Inline JSON body (like curl -d)
+- `-i, --input <file>` - Read body from file (or "-" for stdin)
+- `-F, --field <key=value>` - Add a typed parameter (can be used multiple times)
+- `-f, --raw-field <key=value>` - Add a string parameter without JSON parsing (can be used multiple times)
+
+**Field Syntax (`--field/-F`):**
+
+- `key=value` - Simple field (values parsed as JSON if valid)
+- `key[sub]=value` - Nested object: `{key: {sub: value}}`
+- `key[]=value` - Array append: `{key: [value]}`
+- `key[]` - Empty array: `{key: []}`
+
+Use `--raw-field/-f` to send values as strings without JSON parsing.
+
+### Request Headers
+
+- `-H, --header <Key: Value>` - Add HTTP request header (can be used multiple times)
+
+### Output Options
+
+- `--include` - Include HTTP response status line and headers in the output
+- `--silent` - Do not print the response body
+- `--verbose` - Include full HTTP request and response in the output
+
+## Examples
+
+### List Organizations
+
+```bash
+sentry api organizations/
+```
+
+### Get Issue Details
+
+```bash
+sentry api issues/123/
+```
+
+### Update Issue Status (Inline JSON)
+
+```bash
+sentry api issues/123/ -X PUT -d '{"status":"resolved"}'
+```
+
+### Update Issue Status (Using Fields)
+
+```bash
+sentry api issues/123/ -X PUT -F status=resolved
+```
+
+### Create Project with Nested Fields
+
+```bash
+sentry api projects/my-org/my-project/ -F options[sampleRate]=0.5
+```
+
+### Add Team Member
+
+```bash
+sentry api teams/my-org/my-team/members/ -F user[email]=user@example.com
+```
+
+### Read Body from File
+
+```bash
+sentry api projects/my-org/my-project/ -X PUT --input project.json
+```
+
+### Read Body from stdin
+
+```bash
+echo '{"name":"New Project"}' | sentry api projects/my-org/new-project/ -X POST --input -
+```
+
+### Custom Headers
+
+```bash
+sentry api organizations/ -H "X-Custom-Header: value"
+```
+
+### Include Response Headers
+
+```bash
+sentry api organizations/ --include
+```
+
+### Verbose Output (curl-style)
+
+```bash
+sentry api organizations/ --verbose
+```
+
+## Notes
+
+- The Sentry API requires trailing slashes on endpoints. The command automatically adds them if missing.
+- Field flags (`-F`/`-f`) are mutually exclusive with `--data` and `--input`.
+- For `GET` requests, fields are sent as query parameters. For other methods, they're sent as JSON body.
+- Arrays in field syntax: `key[]=value1 -F key[]=value2` creates `{key: [value1, value2]}`
+- The command exits with code 1 for HTTP 4xx/5xx responses.
+- Response bodies are automatically pretty-printed as JSON when applicable.
+
+## Related Commands
+
+- [`sentry auth login`](/commands/auth/login) - Authenticate with Sentry
+- [`sentry auth status`](/commands/auth/status) - Check authentication status

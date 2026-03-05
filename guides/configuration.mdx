@@ -1,0 +1,559 @@
+---
+title: "Configuration"
+description: "Configure Sentry CLI with config directory, database, defaults, and environment variables"
+---
+
+Sentry CLI stores configuration in a local SQLite database and reads settings from environment variables. This guide covers how to customize the configuration to suit your workflow.
+
+## Configuration Directory
+
+The CLI stores all persistent data in a configuration directory:
+
+```bash
+# Default location
+~/.sentry/
+
+# Contains:
+~/.sentry/cli.db          # SQLite database
+~/.sentry/cli.db-wal      # Write-ahead log
+~/.sentry/cli.db-shm      # Shared memory file
+```
+
+### Custom Configuration Directory
+
+You can change the config directory with `SENTRY_CONFIG_DIR`:
+
+```bash
+# Use a custom directory
+export SENTRY_CONFIG_DIR=~/my-custom-sentry-config
+sentry auth login
+```
+
+<Tabs>
+  <Tab title="Separate profiles">
+    ```bash
+    # Personal account
+    export SENTRY_CONFIG_DIR=~/.sentry-personal
+    sentry auth login
+    
+    # Work account
+    export SENTRY_CONFIG_DIR=~/.sentry-work
+    sentry auth login
+    
+    # Switch between them
+    export SENTRY_CONFIG_DIR=~/.sentry-work
+    sentry org list
+    ```
+  </Tab>
+  
+  <Tab title="SaaS vs Self-Hosted">
+    ```bash
+    # SaaS configuration
+    export SENTRY_CONFIG_DIR=~/.sentry-saas
+    unset SENTRY_URL
+    sentry auth login
+    
+    # Self-hosted configuration
+    export SENTRY_CONFIG_DIR=~/.sentry-selfhosted
+    export SENTRY_URL=https://sentry.example.com
+    sentry auth login
+    ```
+  </Tab>
+  
+  <Tab title="Project-local config">
+    ```bash
+    # Store config in project directory
+    export SENTRY_CONFIG_DIR=./.sentry-config
+    sentry auth login
+    
+    # Add to .gitignore
+    echo ".sentry-config" >> .gitignore
+    ```
+  </Tab>
+</Tabs>
+
+### Directory Permissions
+
+The config directory is created with secure permissions:
+
+```bash
+# Directory: 0700 (rwx------)
+# Database:  0600 (rw-------)
+```
+
+This ensures only your user can read authentication tokens.
+
+<Warning>
+The database contains sensitive authentication tokens. Never commit it to version control or share it.
+</Warning>
+
+## Database
+
+The CLI uses SQLite to store:
+
+- **Authentication**: OAuth tokens, expiry times, refresh tokens
+- **User info**: Email, name, user ID
+- **Defaults**: Default organization and project
+- **Cache**: Organization regions, project metadata, DSN lookups
+- **Pagination**: Cursor state for paginated list commands
+
+### Database Schema
+
+Key tables:
+
+| Table | Purpose |
+|-------|----------|
+| `auth` | OAuth tokens and expiry |
+| `user_info` | Cached user profile |
+| `defaults` | Default org/project |
+| `org_regions` | Org to region URL mapping |
+| `project_cache` | Project metadata cache |
+| `dsn_cache` | DSN to org/project resolution |
+| `pagination_cursors` | List command cursors |
+| `instance_info` | Installation UUID (telemetry) |
+
+### Cache TTL
+
+Most caches expire after 7 days. The CLI automatically cleans up expired entries (10% probability on each write).
+
+To force cache refresh:
+
+```bash
+# Delete the database to clear all caches
+rm ~/.sentry/cli.db*
+
+# Next command will rebuild the cache
+sentry org list
+```
+
+### Database Corruption
+
+If the database becomes corrupted:
+
+```bash
+Error: SQLite error: database disk image is malformed
+```
+
+Remove the database and it will be recreated:
+
+```bash
+rm ~/.sentry/cli.db*
+sentry auth login
+```
+
+<Note>
+Deleting the database logs you out. You'll need to authenticate again.
+</Note>
+
+## Default Organization and Project
+
+Set defaults to avoid typing org/project on every command:
+
+```bash
+# Set default organization
+sentry config default-org my-org
+
+# Set default project
+sentry config default-project my-project
+
+# Now commands use these defaults
+sentry issue list              # Uses default org/project
+sentry project view            # Uses default project
+```
+
+### When Defaults Are Used
+
+Defaults apply when:
+- No org/project specified in arguments
+- No DSN detected in current directory
+- No `--org` or `--project` flags provided
+
+### Precedence
+
+1. **Explicit arguments**: `sentry issue list my-org/my-project`
+2. **Flags**: `--org my-org --project my-project`
+3. **DSN auto-detection**: From `.env` or source code
+4. **Defaults**: Stored in database
+
+### Viewing Defaults
+
+```bash
+# Show current configuration
+sentry config show
+
+# Output:
+# Default organization: my-org
+# Default project: my-project
+```
+
+### Clearing Defaults
+
+```bash
+# Clear default organization
+sentry config default-org --clear
+
+# Clear default project
+sentry config default-project --clear
+```
+
+## Environment Variables
+
+### Authentication
+
+<ParamField path="SENTRY_AUTH_TOKEN" type="string">
+  Authentication token. Takes priority over `SENTRY_TOKEN` and stored OAuth tokens.
+  
+  ```bash
+  export SENTRY_AUTH_TOKEN=sntrys_YourTokenHere
+  sentry org list
+  ```
+</ParamField>
+
+<ParamField path="SENTRY_TOKEN" type="string">
+  Alternative authentication token. Used if `SENTRY_AUTH_TOKEN` is not set.
+  
+  ```bash
+  export SENTRY_TOKEN=sntrys_YourTokenHere
+  sentry org list
+  ```
+</ParamField>
+
+<Info>
+**Token precedence:** `SENTRY_AUTH_TOKEN` > `SENTRY_TOKEN` > stored OAuth token
+</Info>
+
+### Self-Hosted Configuration
+
+<ParamField path="SENTRY_URL" type="string">
+  Base URL for self-hosted Sentry instances. Defaults to `https://sentry.io`.
+  
+  ```bash
+  export SENTRY_URL=https://sentry.example.com
+  sentry org list
+  ```
+  
+  See the [Self-Hosted guide](/guides/self-hosted) for details.
+</ParamField>
+
+<ParamField path="SENTRY_CLIENT_ID" type="string">
+  OAuth client ID for self-hosted instances. Required for OAuth device flow on self-hosted Sentry 26.1.0+.
+  
+  ```bash
+  export SENTRY_CLIENT_ID=your-client-id
+  sentry auth login
+  ```
+</ParamField>
+
+### Configuration
+
+<ParamField path="SENTRY_CONFIG_DIR" type="string">
+  Directory for storing CLI configuration and database. Defaults to `~/.sentry`.
+  
+  ```bash
+  export SENTRY_CONFIG_DIR=~/.sentry-work
+  sentry auth login
+  ```
+</ParamField>
+
+### Logging and Debugging
+
+<ParamField path="SENTRY_LOG_LEVEL" type="string">
+  Log level for CLI output. Options: `error`, `warn`, `info` (default), `debug`, `trace`.
+  
+  ```bash
+  # Enable debug logging
+  SENTRY_LOG_LEVEL=debug sentry issue list
+  
+  # Trace all HTTP requests
+  SENTRY_LOG_LEVEL=trace sentry org list 2>debug.log
+  ```
+</ParamField>
+
+<ParamField path="NO_COLOR" type="string">
+  Disable colored output. Set to any value to disable.
+  
+  ```bash
+  NO_COLOR=1 sentry issue list
+  ```
+</ParamField>
+
+<ParamField path="SENTRY_PLAIN_OUTPUT" type="string">
+  Force plain text output (no colors, no ANSI). Useful for non-TTY environments.
+  
+  ```bash
+  SENTRY_PLAIN_OUTPUT=1 sentry issue list
+  ```
+</ParamField>
+
+### Telemetry
+
+<ParamField path="SENTRY_TELEMETRY_DISABLED" type="string">
+  Disable error and performance telemetry. Set to `1` or `true` to disable.
+  
+  ```bash
+  export SENTRY_TELEMETRY_DISABLED=1
+  sentry org list
+  ```
+  
+  The CLI sends errors and performance data to Sentry to help improve the product. Disabling telemetry opts you out.
+</ParamField>
+
+## Common Configuration Patterns
+
+### Multi-Account Setup
+
+Manage multiple Sentry accounts with shell aliases:
+
+```bash ~/.bashrc
+# Personal account (SaaS)
+alias sentry-personal='SENTRY_CONFIG_DIR=~/.sentry-personal sentry'
+
+# Work account (SaaS)
+alias sentry-work='SENTRY_CONFIG_DIR=~/.sentry-work sentry'
+
+# Self-hosted
+alias sentry-sh='SENTRY_CONFIG_DIR=~/.sentry-selfhosted SENTRY_URL=https://sentry.example.com sentry'
+```
+
+Usage:
+
+```bash
+sentry-personal org list
+sentry-work issue list
+sentry-sh project list
+```
+
+### Project-Local Configuration
+
+Store Sentry config in your project:
+
+<Steps>
+  <Step title="Create local config directory">
+    ```bash
+    mkdir .sentry-config
+    echo ".sentry-config" >> .gitignore
+    ```
+  </Step>
+  
+  <Step title="Set environment variable">
+    ```bash .env.local
+    SENTRY_CONFIG_DIR=./.sentry-config
+    SENTRY_AUTH_TOKEN=your-token
+    ```
+  </Step>
+  
+  <Step title="Use in scripts">
+    ```bash deploy.sh
+    #!/bin/bash
+    set -a
+    source .env.local
+    set +a
+    
+    sentry org list
+    sentry issue list
+    ```
+  </Step>
+</Steps>
+
+### CI/CD Configuration
+
+Best practices for CI/CD:
+
+<CodeGroup>
+```yaml GitHub Actions
+name: Deploy
+on: [push]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # Use token auth (not OAuth) in CI
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      # Optional: self-hosted
+      # SENTRY_URL: https://sentry.example.com
+      # Disable interactive prompts
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install -g @sentry/cli-next
+      - run: sentry project list --json
+```
+
+```yaml GitLab CI
+variables:
+  SENTRY_AUTH_TOKEN: $SENTRY_AUTH_TOKEN
+  # SENTRY_URL: https://sentry.example.com
+
+sentry-check:
+  image: node:20
+  before_script:
+    - npm install -g @sentry/cli-next
+  script:
+    - sentry issue list --json
+```
+
+```groovy Jenkins
+pipeline {
+  agent any
+  environment {
+    SENTRY_AUTH_TOKEN = credentials('sentry-auth-token')
+    // SENTRY_URL = 'https://sentry.example.com'
+  }
+  stages {
+    stage('Check Issues') {
+      steps {
+        sh 'npm install -g @sentry/cli-next'
+        sh 'sentry issue list --json'
+      }
+    }
+  }
+}
+```
+</CodeGroup>
+
+<Warning>
+Never hardcode tokens in CI config. Always use secrets/credentials management.
+</Warning>
+
+### Development vs Production
+
+Separate configs for different environments:
+
+```bash
+# Development (local OAuth)
+export SENTRY_CONFIG_DIR=~/.sentry-dev
+export SENTRY_URL=https://sentry-dev.example.com
+sentry auth login
+
+# Production (token from secrets manager)
+export SENTRY_AUTH_TOKEN=$(aws secretsmanager get-secret-value --secret-id sentry-token --query SecretString --output text)
+export SENTRY_URL=https://sentry.example.com
+sentry issue list
+```
+
+## Debugging Configuration Issues
+
+### Check effective configuration
+
+```bash
+# Show auth status and source
+sentry auth status
+
+# Show defaults
+sentry config show
+
+# Show all Sentry environment variables
+env | grep SENTRY_
+```
+
+### Enable debug logging
+
+```bash
+# See all HTTP requests
+SENTRY_LOG_LEVEL=debug sentry org list 2>&1 | grep -i http
+
+# Trace database operations
+SENTRY_LOG_LEVEL=trace sentry config show 2>trace.log
+```
+
+### Test token validity
+
+```bash
+# Set token explicitly
+export SENTRY_AUTH_TOKEN=your-token
+
+# Test access
+sentry auth status
+
+# If successful, token is valid
+# If error, token is invalid or expired
+```
+
+### Check database location
+
+```bash
+# Find current database
+if [ -n "$SENTRY_CONFIG_DIR" ]; then
+  echo "Using: $SENTRY_CONFIG_DIR/cli.db"
+else
+  echo "Using: ~/.sentry/cli.db"
+fi
+
+# Check if it exists
+ls -lh ~/.sentry/cli.db*
+```
+
+### Reset configuration
+
+If configuration is broken:
+
+```bash
+# Backup current config
+mv ~/.sentry ~/.sentry.backup
+
+# Reconfigure from scratch
+sentry auth login
+sentry config default-org my-org
+sentry config default-project my-project
+```
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="Never commit the config directory">
+    ```bash .gitignore
+    # Sentry CLI config
+    .sentry-config/
+    ~/.sentry/
+    ```
+  </Accordion>
+  
+  <Accordion title="Use environment variables in CI">
+    ```yaml
+    # ✅ Good: Use secrets
+    env:
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+    
+    # ❌ Bad: Hardcode tokens
+    env:
+      SENTRY_AUTH_TOKEN: sntrys_abc123...
+    ```
+  </Accordion>
+  
+  <Accordion title="Restrict token scopes">
+    When creating auth tokens, only grant necessary scopes:
+    
+    **Read-only access:**
+    - `project:read`
+    - `org:read`
+    - `event:read`
+    
+    **CI/CD deployment:**
+    - `project:read`
+    - `project:write`
+    - `org:read`
+  </Accordion>
+  
+  <Accordion title="Rotate tokens regularly">
+    ```bash
+    # Create new token in Sentry UI
+    # Update in secrets manager
+    aws secretsmanager update-secret \
+      --secret-id sentry-token \
+      --secret-string "new-token-here"
+    
+    # Revoke old token in Sentry UI
+    ```
+  </Accordion>
+  
+  <Accordion title="Use separate configs for work accounts">
+    ```bash
+    # Personal: ~/.sentry-personal
+    # Work: ~/.sentry-work
+    # Never mix credentials
+    ```
+    
+    This prevents accidentally using work credentials for personal projects.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,397 @@
+---
+title: Project Resolution
+description: How Sentry CLI resolves organization and project from CLI arguments, environment variables, config defaults, and DSN detection
+---
+
+Sentry CLI resolves the target organization and project from multiple sources, following a well-defined priority order. This enables both explicit targeting (`org/project`) and automatic inference from your environment.
+
+## Resolution Priority
+
+The CLI resolves org and project in this order (highest to lowest):
+
+1. **Explicit CLI arguments** - `sentry issue list acme/frontend`
+2. **Environment variables** - `SENTRY_ORG` / `SENTRY_PROJECT`
+3. **Config defaults** - `sentry config set org acme`
+4. **DSN auto-detection** - Scans source code and `.env` files
+5. **Directory name inference** - Matches project slugs using word boundaries
+
+## Explicit CLI Arguments
+
+### Org/Project Format
+
+Most commands accept an org/project argument in the format `<org>/<project>`:
+
+```bash
+sentry issue list acme/frontend
+sentry event view acme/frontend abc123
+```
+
+### Positional vs Flag Arguments
+
+Some commands use positional arguments, others use flags:
+
+```bash
+# Positional (most commands)
+sentry issue list acme/frontend
+
+# Flags (some commands)  
+sentry project view --org acme --project frontend
+```
+
+<Note>
+When using flags, both `--org` and `--project` must be provided together. Providing only one will result in an error.
+</Note>
+
+## Environment Variables
+
+Set organization and project via environment variables:
+
+```bash
+export SENTRY_ORG="acme"
+export SENTRY_PROJECT="frontend"
+sentry issue list
+```
+
+### Combo Notation
+
+`SENTRY_PROJECT` supports the `<org>/<project>` combo notation:
+
+```bash
+export SENTRY_PROJECT="acme/frontend"
+sentry issue list
+```
+
+When the combo form is used, `SENTRY_ORG` is ignored.
+
+### Resolution Logic
+
+```typescript
+// From src/lib/resolve-target.ts
+function resolveFromEnvVars(): {
+  org: string;
+  project?: string;
+} | null {
+  const rawProject = process.env.SENTRY_PROJECT?.trim();
+  
+  // SENTRY_PROJECT=org/project combo takes priority
+  if (rawProject?.includes("/")) {
+    const [org, project] = rawProject.split("/");
+    if (org && project) {
+      return { org, project };
+    }
+  }
+  
+  const envOrg = process.env.SENTRY_ORG?.trim();
+  
+  if (envOrg && rawProject) {
+    return { org: envOrg, project: rawProject };
+  }
+  
+  if (envOrg) {
+    return { org: envOrg };
+  }
+  
+  return null;
+}
+```
+
+## Config Defaults
+
+Set default org and project that persist across commands:
+
+```bash
+sentry config set org acme
+sentry config set project frontend
+sentry issue list  # Uses acme/frontend
+```
+
+Defaults are stored in SQLite:
+
+```sql
+CREATE TABLE defaults (
+  id INTEGER PRIMARY KEY,
+  org TEXT,
+  project TEXT
+);
+```
+
+## DSN Auto-Detection
+
+When no explicit target is provided, the CLI automatically detects the project from DSN:
+
+```javascript
+// src/app.js
+Sentry.init({
+  dsn: "https://abc123@o123.ingest.sentry.io/456"
+});
+```
+
+```bash
+# Automatically uses the project from DSN
+sentry issue list
+```
+
+### Resolution via DSN
+
+The CLI resolves DSN to org/project using cached project info:
+
+```typescript
+// From src/lib/resolve-target.ts
+export async function resolveFromDsn(
+  cwd: string
+): Promise<ResolvedTarget | null> {
+  const dsn = await detectDsn(cwd);
+  if (!(dsn?.orgId && dsn.projectId)) {
+    return null;
+  }
+  
+  // Check cache first
+  const cached = await getCachedProject(dsn.orgId, dsn.projectId);
+  if (cached) {
+    return {
+      org: cached.orgSlug,
+      project: cached.projectSlug,
+      projectId: cached.projectId,
+      orgDisplay: cached.orgName,
+      projectDisplay: cached.projectName,
+      detectedFrom: getDsnSourceDescription(dsn)
+    };
+  }
+  
+  // Cache miss - fetch from API
+  const projectInfo = await getProject(dsn.orgId, dsn.projectId);
+  
+  // Cache for next time
+  await setCachedProject(dsn.orgId, dsn.projectId, {
+    orgSlug: projectInfo.organization.slug,
+    orgName: projectInfo.organization.name,
+    projectSlug: projectInfo.slug,
+    projectName: projectInfo.name,
+    projectId: projectInfo.id
+  });
+  
+  return {
+    org: projectInfo.organization.slug,
+    project: projectInfo.slug,
+    // ...
+  };
+}
+```
+
+### Project Cache Schema
+
+```sql
+CREATE TABLE project_cache (
+  cache_key TEXT PRIMARY KEY,
+  org_slug TEXT NOT NULL,
+  org_name TEXT NOT NULL,
+  project_slug TEXT NOT NULL,
+  project_name TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+```
+
+<Info>
+Project info is cached to avoid repeated API calls. Cache entries are keyed by either `org_id:project_id` or `dsn_key` depending on the DSN format.
+</Info>
+
+## Directory Name Inference
+
+As a last resort, the CLI infers the project from the current directory name:
+
+```bash
+cd ~/projects/acme-frontend
+sentry issue list
+# Searches for projects matching "acme-frontend" using word boundaries
+```
+
+### Word Boundary Matching
+
+The inference uses bidirectional word boundary matching (`\b`):
+
+```typescript
+// Matches:
+// - "frontend" matches directory "my-frontend"
+// - "acme" matches directory "acme-monorepo"  
+// - "api" matches directory "graphql-api"
+
+// From src/lib/resolve-target.ts
+async function inferFromDirectoryName(
+  cwd: string
+): Promise<ResolvedTargets> {
+  const { projectRoot } = await findProjectRoot(cwd);
+  const dirName = basename(projectRoot);
+  
+  // Skip inference for invalid names
+  if (!isValidDirNameForInference(dirName)) {
+    return { targets: [] };
+  }
+  
+  // Search for matching projects
+  const matches = await findProjectsByPattern(dirName);
+  
+  return {
+    targets: matches.map(m => ({
+      org: m.orgSlug,
+      project: m.slug,
+      detectedFrom: `directory name "${dirName}"`
+    })),
+    footer: matches.length > 1 
+      ? `Found ${matches.length} projects matching "${dirName}"`
+      : undefined
+  };
+}
+```
+
+### Inference Rules
+
+- Minimum directory name length: 2 characters
+- Hidden directories (starting with `.`) are skipped
+- Matches are cached for 24 hours
+
+<Warning>
+Directory name inference queries all accessible projects via the API. It will be skipped if not authenticated.
+</Warning>
+
+## Multiple Project Resolution
+
+In monorepo scenarios, the CLI may detect multiple projects:
+
+```typescript
+// From src/lib/resolve-target.ts
+export async function resolveAllTargets(
+  options: ResolveOptions
+): Promise<ResolvedTargets> {
+  // ... priority resolution ...
+  
+  // DSN auto-detection (may find multiple)
+  const detection = await detectAllDsns(cwd);
+  
+  // Resolve all DSNs in parallel
+  const resolvedTargets = await Promise.all(
+    detection.all.map(dsn => resolveDsnToTarget(dsn))
+  );
+  
+  // Deduplicate by org+project
+  const seen = new Set<string>();
+  const targets = resolvedTargets.filter(t => {
+    if (t === null) return false;
+    const key = `${t.org}:${t.project}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+  
+  return {
+    targets,
+    footer: targets.length > 1 
+      ? formatMultipleProjectsFooter(targets)
+      : undefined
+  };
+}
+```
+
+Commands that support multiple projects (like `issue list`) will process all detected targets.
+
+## Org Prefix Normalization
+
+DSN hosts encode org IDs with an `o` prefix (e.g., `o1081365`). The API rejects this form, so the CLI strips it:
+
+```typescript
+// From src/lib/arg-parsing.ts
+export function stripDsnOrgPrefix(org: string): string {
+  const match = /^o(\d+)$/.exec(org);
+  return match ? match[1] : org;
+}
+```
+
+This normalization is applied automatically to all parsed org arguments.
+
+<Note>
+The regex `/^o(\d+)$/` is safe for slugs like "organic" because it requires the entire string to match the pattern.
+</Note>
+
+## Resolved Target Type
+
+All resolution functions return a `ResolvedTarget`:
+
+```typescript
+type ResolvedTarget = {
+  org: string;              // Organization slug for API calls
+  project: string;          // Project slug for API calls  
+  projectId?: number;       // Numeric project ID
+  orgDisplay: string;       // Human-readable org name
+  projectDisplay: string;   // Human-readable project name
+  detectedFrom?: string;    // Source description if auto-detected
+  packagePath?: string;     // Monorepo package path
+};
+```
+
+### Display Names
+
+The CLI displays friendly names when available:
+
+```bash
+# Using slugs (acme/frontend)
+Using organization: Acme Inc
+Using project: Frontend App
+
+# With detection source
+Using project: Frontend App (detected from src/index.ts)
+```
+
+## Error Handling
+
+### Missing Context
+
+When no target can be resolved:
+
+```typescript
+throw new ContextError(
+  "Organization and project",
+  "sentry issue list <org>/<project>"
+);
+```
+
+### Ambiguous Projects
+
+When a project slug exists in multiple organizations:
+
+```typescript
+throw new ValidationError(
+  `Project "${slug}" exists in multiple organizations.\n\n` +
+  `Specify the organization:\n${orgList}`
+);
+```
+
+### Resolution Failures
+
+```typescript
+throw new ResolutionError(
+  `Project '${project}'`,
+  `not found in organization '${org}'`,
+  `sentry issue list ${org}/<project>`,
+  ["Check the project slug at https://sentry.io/organizations/${org}/projects/"]
+);
+```
+
+## Numeric Project IDs
+
+The CLI supports numeric project IDs for API queries:
+
+```typescript
+export async function fetchProjectId(
+  org: string,
+  project: string  
+): Promise<number | undefined> {
+  const projectInfo = await getProject(org, project);
+  return toNumericId(projectInfo.id);
+}
+```
+
+Numeric IDs avoid "project not actively selected" errors in some API endpoints.
+
+<Info>
+When a numeric project ID is successfully resolved, the CLI hints about using the slug form for faster lookups.
+</Info>

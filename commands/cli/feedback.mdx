@@ -1,0 +1,182 @@
+---
+title: sentry cli feedback
+description: Send feedback about the Sentry CLI
+---
+
+# sentry cli feedback
+
+Submit feedback about your experience with the Sentry CLI. All text after `feedback` is sent as your message.
+
+## Usage
+
+```bash
+sentry cli feedback <message...>
+```
+
+## Arguments
+
+- **message** (required) - Your feedback message (all remaining arguments are joined into a single message)
+
+## Examples
+
+### Positive Feedback
+
+```bash
+sentry cli feedback I love this tool
+```
+
+### Feature Request
+
+```bash
+sentry cli feedback Please add support for searching issues by tag
+```
+
+### Report Confusion
+
+```bash
+sentry cli feedback The issue view is confusing, needs better formatting
+```
+
+### Multi-word Messages
+
+```bash
+sentry cli feedback The upgrade command worked perfectly on macOS
+```
+
+No quotes needed—all arguments are automatically joined into a single message.
+
+## How It Works
+
+1. Your feedback is sent to Sentry via the `@sentry/bun` SDK's `captureFeedback()` method
+2. The CLI waits up to 3 seconds to ensure the feedback is sent before exiting
+3. Feedback is associated with your CLI version and platform for context
+
+## Telemetry Requirement
+
+Feedback requires telemetry to be enabled. If telemetry is disabled:
+
+```bash
+$ sentry cli feedback This is great
+Feedback not sent: telemetry is disabled.
+Unset SENTRY_CLI_NO_TELEMETRY to enable feedback.
+```
+
+### Enabling Feedback
+
+To enable feedback, unset the `SENTRY_CLI_NO_TELEMETRY` environment variable:
+
+```bash
+# Temporary (current session)
+unset SENTRY_CLI_NO_TELEMETRY
+
+# Permanent (add to ~/.bashrc, ~/.zshrc, etc.)
+# Remove this line if present: export SENTRY_CLI_NO_TELEMETRY=1
+```
+
+## Success Confirmation
+
+When feedback is successfully sent:
+
+```bash
+$ sentry cli feedback This is great
+Feedback submitted. Thank you!
+```
+
+## Network Timeout
+
+If the feedback cannot be sent within 3 seconds (network issues):
+
+```bash
+$ sentry cli feedback This is great
+Feedback may not have been sent (network timeout).
+```
+
+The CLI does not retry automatically. Try again when you have a stable internet connection.
+
+## Empty Messages
+
+Empty or whitespace-only messages are rejected:
+
+```bash
+$ sentry cli feedback
+Error: Please provide a feedback message.
+```
+
+## Privacy
+
+Feedback submissions include:
+
+- Your feedback message
+- CLI version (e.g., `0.5.0`)
+- Platform/OS (e.g., `darwin`, `linux`, `win32`)
+- Timestamp
+
+**Not included:**
+- Authentication tokens
+- Project/organization data
+- File paths or code from your machine
+- Personal information (unless you include it in your message)
+
+## Use Cases
+
+### Report Bugs
+
+```bash
+sentry cli feedback The issue list command crashes when using --period flag
+```
+
+Note: For detailed bug reports, consider opening an issue at https://github.com/getsentry/sentry-cli/issues
+
+### Suggest Features
+
+```bash
+sentry cli feedback Add support for exporting issues to CSV
+```
+
+### Report Confusion
+
+```bash
+sentry cli feedback Not sure what --follow mode does in issue list
+```
+
+### Express Appreciation
+
+```bash
+sentry cli feedback The auto-detection of projects from DSN is amazing
+```
+
+## Feedback vs. GitHub Issues
+
+| Feedback Command | GitHub Issues |
+|------------------|---------------|
+| Quick, one-line thoughts | Detailed bug reports |
+| Feature ideas | Feature proposals with use cases |
+| General impressions | Reproducible steps |
+| Anonymous (no GitHub account needed) | Public discussion |
+| Sent to Sentry team | Community + team visibility |
+
+**When to use feedback:**
+- Quick thoughts or impressions
+- Don't need a response
+- Want to remain anonymous
+
+**When to use GitHub issues:**
+- Need detailed troubleshooting
+- Want to track progress
+- Need to share logs, screenshots, or code
+
+## Exit Codes
+
+- `0` - Feedback sent successfully (or telemetry disabled)
+- `1` - Validation error (empty message)
+
+## Related Commands
+
+- [`sentry --version`](/commands/) - Show CLI version
+- [`sentry --help`](/commands/) - View all available commands
+
+## External Resources
+
+- [GitHub Issues](https://github.com/getsentry/sentry-cli/issues) - Report detailed bugs
+- [Sentry CLI Documentation](https://cli.sentry.dev) - Full documentation
+- [Sentry Discord](https://discord.gg/sentry) - Community support

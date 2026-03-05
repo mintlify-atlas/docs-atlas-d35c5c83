@@ -1,0 +1,121 @@
+---
+title: sentry trace list
+description: List recent traces in a Sentry project
+---
+
+## Usage
+
+```bash
+sentry trace list [<org>/<project>]
+```
+
+List recent traces from Sentry projects.
+
+## Target Specification
+
+```bash
+sentry trace list               # auto-detect from DSN or config
+sentry trace list <org>/<proj>  # explicit org and project
+sentry trace list <project>     # find project across all orgs
+```
+
+## Flags
+
+<ParamField path="--limit" type="number" default="20">
+  Number of traces to retrieve (1-1000)
+  
+  **Alias:** `-n`
+</ParamField>
+
+<ParamField path="--query" type="string">
+  Search query using Sentry search syntax to filter traces
+  
+  **Alias:** `-q`
+</ParamField>
+
+<ParamField path="--sort" type="string" default="date">
+  Sort order for traces. Valid values:
+  - `date` - Most recent first (default)
+  - `duration` - Slowest first
+  
+  **Alias:** `-s`
+</ParamField>
+
+<ParamField path="--cursor" type="string">
+  Pagination cursor. Use `last` to continue from the last page.
+  
+  The cursor is automatically saved between invocations, allowing you to paginate through results.
+  
+  **Alias:** `-c`
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Output as JSON
+</ParamField>
+
+## Examples
+
+### List last 20 traces
+
+```bash
+sentry trace list
+```
+
+### Show more traces
+
+```bash
+sentry trace list --limit 50
+```
+
+### Sort by slowest first
+
+```bash
+sentry trace list --sort duration
+```
+
+### Filter by transaction name
+
+```bash
+sentry trace list -q "transaction:GET /api/users"
+```
+
+### Paginate through results
+
+```bash
+# First page
+sentry trace list --limit 100
+
+# Next page
+sentry trace list -c last
+```
+
+### Output as JSON
+
+```bash
+sentry trace list --json
+```
+
+## Output
+
+### Human-readable format
+
+Displays a table with:
+- Trace ID (first 8 characters)
+- Transaction name
+- Duration
+- Timestamp
+
+Footer shows pagination info and next page command.
+
+### JSON format
+
+Returns an object with:
+- `data` - Array of trace objects
+- `nextCursor` - Cursor for the next page (if available)
+- `hasMore` - Boolean indicating if more results exist
+
+## Notes
+
+- The cursor is automatically persisted between invocations
+- Pagination state is keyed by org/project and active filter flags (sort, query)
+- Use `sentry trace view <TRACE_ID>` to view the full span tree for a specific trace

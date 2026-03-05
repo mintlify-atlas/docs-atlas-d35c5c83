@@ -1,0 +1,374 @@
+---
+title: Environment Variables
+description: Complete reference of all environment variables supported by the Sentry CLI
+---
+
+The Sentry CLI supports various environment variables to control its behavior without command-line flags. This page provides a comprehensive reference.
+
+## Authentication
+
+### SENTRY_AUTH_TOKEN
+
+**Type**: String  
+**Priority**: Highest (overrides `SENTRY_TOKEN` and stored OAuth tokens)
+
+Authentication token for Sentry API requests. This can be:
+- An OAuth access token (from `sentry auth login`)
+- A user auth token (from Sentry settings)
+- An org auth token (for CI/CD)
+
+```bash
+export SENTRY_AUTH_TOKEN=sntrys_your_token_here
+```
+
+When set, the CLI:
+- Skips all OAuth flows
+- Ignores stored tokens in the database
+- Assumes the token is valid (no refresh/expiry checks)
+
+### SENTRY_TOKEN
+
+**Type**: String  
+**Priority**: Medium (used if `SENTRY_AUTH_TOKEN` is not set)
+
+Alternative to `SENTRY_AUTH_TOKEN`. Provided for compatibility with legacy Sentry CLI tools.
+
+```bash
+export SENTRY_TOKEN=sntrys_your_token_here
+```
+
+## Configuration
+
+### SENTRY_URL
+
+**Type**: URL  
+**Default**: `https://sentry.io`
+
+The base URL of your Sentry instance. Required for self-hosted Sentry installations.
+
+```bash
+# Self-hosted
+export SENTRY_URL=https://sentry.example.com
+
+# SaaS (default)
+export SENTRY_URL=https://sentry.io
+```
+
+Used for:
+- OAuth device flow
+- API requests (for control silo)
+- Region discovery
+
+### SENTRY_ORG
+
+**Type**: String
+
+Default organization slug for commands that require an organization context.
+
+```bash
+export SENTRY_ORG=my-organization
+```
+
+When set:
+- Commands use this org by default
+- Can be overridden by positional arguments or `--org` flag
+- Auto-detection is skipped
+
+### SENTRY_PROJECT
+
+**Type**: String
+
+Default project slug for commands that require a project context.
+
+```bash
+export SENTRY_PROJECT=my-project
+```
+
+When set:
+- Commands use this project by default
+- Can be overridden by positional arguments
+- Auto-detection is skipped
+
+**Note**: Both `SENTRY_ORG` and `SENTRY_PROJECT` must be set together for project-scoped commands.
+
+### SENTRY_DSN
+
+**Type**: DSN URL
+
+Sentry DSN (Data Source Name) for auto-detecting org/project context.
+
+```bash
+export SENTRY_DSN=https://abc123@o123456.ingest.us.sentry.io/7890123
+```
+
+When set:
+- The CLI extracts org and project information from the DSN
+- Takes precedence over file-based DSN detection
+- Can be overridden by `SENTRY_ORG`/`SENTRY_PROJECT` or command arguments
+
+### SENTRY_CONFIG_DIR
+
+**Type**: Directory path  
+**Default**: `~/.config/sentry-cli` (Linux/macOS), `%APPDATA%\sentry-cli` (Windows)
+
+Custom location for the CLI's configuration directory and SQLite database.
+
+```bash
+export SENTRY_CONFIG_DIR=/path/to/custom/config
+```
+
+Useful for:
+- Running multiple CLI instances with separate configs
+- Testing and development
+- Containerized environments
+
+### SENTRY_CLIENT_ID
+
+**Type**: String  
+**Required**: For self-hosted OAuth
+
+OAuth client ID for device flow authentication. Required for self-hosted Sentry instances (version 26.1.0+).
+
+```bash
+export SENTRY_CLIENT_ID=your-oauth-client-id
+```
+
+To obtain a client ID:
+1. Go to your Sentry instance Settings → Developer Settings
+2. Create a new public OAuth application
+3. Copy the client ID
+
+**Note**: Not required for SaaS (sentry.io).
+
+## Behavior Control
+
+### SENTRY_LOG_LEVEL
+
+**Type**: String  
+**Default**: `info`  
+**Values**: `error`, `warn`, `info`, `debug`, `trace`
+
+Controls the verbosity of CLI logging output.
+
+```bash
+export SENTRY_LOG_LEVEL=debug
+```
+
+Log levels:
+- `error` (0): Only errors
+- `warn` (1): Errors and warnings
+- `info` (3): Normal output (default)
+- `debug` (4): Detailed debugging information
+- `trace` (5): Very verbose (includes HTTP requests)
+
+**Alternative**: Use the `--log-level` flag or `--verbose` flag (sets level to `debug`).
+
+### NO_COLOR
+
+**Type**: Boolean (`1` or unset)  
+**Default**: Unset
+
+Disables colored output in the CLI.
+
+```bash
+export NO_COLOR=1
+```
+
+When set:
+- All ANSI color codes are stripped from output
+- Markdown formatting is rendered as plain text
+- Useful for CI/CD environments or when piping output
+
+### SENTRY_PLAIN_OUTPUT
+
+**Type**: Boolean (`1` or unset)  
+**Default**: Unset
+
+Forces plain text output (disables color and fancy formatting).
+
+```bash
+export SENTRY_PLAIN_OUTPUT=1
+```
+
+Similar to `NO_COLOR` but with higher priority. Checked before `NO_COLOR` and TTY detection.
+
+### SENTRY_DISABLE_UPDATE_CHECK
+
+**Type**: Boolean (`1` or unset)  
+**Default**: Unset
+
+Disables automatic version update checks.
+
+```bash
+export SENTRY_DISABLE_UPDATE_CHECK=1
+```
+
+When set:
+- The CLI won't check for new versions on startup
+- Update notifications are suppressed
+- Useful for CI/CD environments
+
+## Advanced
+
+### SENTRY_CLI_NO_AUTO_REPAIR
+
+**Type**: Boolean (`1` or unset)  
+**Default**: Unset
+
+Disables automatic database schema repair.
+
+```bash
+export SENTRY_CLI_NO_AUTO_REPAIR=1
+```
+
+When set:
+- Schema errors will cause the CLI to exit instead of auto-fixing
+- Useful for debugging schema migration issues
+- Not recommended for normal use
+
+### SENTRY_CLI_DSN
+
+**Type**: DSN URL  
+**Default**: `https://1188a86f3f8168f089450587b00bca66@o1.ingest.us.sentry.io/4510776311808000` (hardcoded)
+
+DSN for CLI telemetry (error tracking of the CLI itself, not your projects).
+
+```bash
+# Disable CLI telemetry
+export SENTRY_CLI_DSN=""
+```
+
+**Note**: This is for tracking bugs in the CLI. Your project's DSN is separate and configured via `SENTRY_DSN`.
+
+## Test Environment Variables
+
+These variables are used by the CLI's test suite and should not be set in production.
+
+### SENTRY_TEST_AUTH_TOKEN
+
+**Type**: String  
+**Purpose**: Authentication token for E2E tests
+
+```bash
+export SENTRY_TEST_AUTH_TOKEN=your-test-token
+```
+
+### SENTRY_TEST_ORG
+
+**Type**: String  
+**Purpose**: Test organization slug for E2E tests
+
+```bash
+export SENTRY_TEST_ORG=your-test-org
+```
+
+### SENTRY_TEST_PROJECT
+
+**Type**: String  
+**Purpose**: Test project slug for E2E tests
+
+```bash
+export SENTRY_TEST_PROJECT=your-test-project
+```
+
+## Precedence Rules
+
+When multiple sources provide the same configuration, the CLI uses this precedence order (highest to lowest):
+
+### Authentication
+
+1. `SENTRY_AUTH_TOKEN` environment variable
+2. `SENTRY_TOKEN` environment variable
+3. Stored OAuth token in database
+
+### Organization/Project Context
+
+1. Command-line positional arguments (e.g., `sentry issue list org/project`)
+2. Command-line flags (`--org`, `--project`)
+3. `SENTRY_ORG` and `SENTRY_PROJECT` environment variables
+4. `SENTRY_DSN` environment variable (extracts org/project)
+5. DSN auto-detection (scans files in current directory)
+6. Stored defaults in database
+
+### Output Formatting
+
+1. `--json` command-line flag
+2. `SENTRY_PLAIN_OUTPUT` environment variable
+3. `NO_COLOR` environment variable
+4. TTY detection (auto-detects if output is a terminal)
+
+## Usage Examples
+
+### CI/CD Environment
+
+```bash
+# .github/workflows/deploy.yml
+env:
+  SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+  SENTRY_ORG: my-organization
+  SENTRY_PROJECT: my-project
+  SENTRY_DISABLE_UPDATE_CHECK: 1
+  NO_COLOR: 1
+```
+
+### Self-Hosted Sentry
+
+```bash
+# .env
+SENTRY_URL=https://sentry.example.com
+SENTRY_CLIENT_ID=your-oauth-client-id
+SENTRY_ORG=my-organization
+```
+
+### Development/Testing
+
+```bash
+# .env.local
+SENTRY_CONFIG_DIR=./test-config
+SENTRY_LOG_LEVEL=debug
+SENTRY_DISABLE_UPDATE_CHECK=1
+```
+
+### Multiple Environments
+
+```bash
+# Production
+export SENTRY_AUTH_TOKEN=$PROD_TOKEN
+export SENTRY_ORG=my-org-prod
+
+# Staging
+export SENTRY_AUTH_TOKEN=$STAGING_TOKEN
+export SENTRY_ORG=my-org-staging
+```
+
+## Security Best Practices
+
+<Accordion title="Protecting Sensitive Environment Variables">
+
+1. **Never commit tokens to version control**
+   - Add `.env.local` to `.gitignore`
+   - Use secret management services (GitHub Secrets, AWS Secrets Manager, etc.)
+
+2. **Use restricted tokens in CI/CD**
+   - Create org auth tokens with minimal scopes
+   - Avoid using personal user tokens
+
+3. **Rotate tokens regularly**
+   - Generate new tokens periodically
+   - Revoke old tokens after rotation
+
+4. **Use environment-specific tokens**
+   - Separate tokens for dev, staging, and production
+   - Limit token access to specific projects when possible
+
+5. **Audit token usage**
+   - Monitor auth token usage in Sentry settings
+   - Investigate unexpected usage patterns
+
+</Accordion>
+
+## Related Documentation
+
+- [Configuration File](./configuration-file) - SQLite database structure
+- [Troubleshooting](./troubleshooting) - Common issues and solutions
+- [Authentication](/commands/auth) - Auth command reference

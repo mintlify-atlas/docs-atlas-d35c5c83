@@ -1,0 +1,304 @@
+---
+title: Installation
+description: Install Sentry CLI using the install script, Homebrew, npm, pnpm, bun, or run it directly with npx. Multiple methods available for all platforms.
+---
+
+# Installation
+
+Sentry CLI can be installed in several ways depending on your environment and preferences. Choose the method that works best for your workflow.
+
+## Install Script (Recommended)
+
+The install script is the fastest way to get started. It automatically detects your platform, downloads the appropriate binary, and configures your shell.
+
+```bash
+curl -fsSL https://cli.sentry.dev/install | bash
+```
+
+<Note>
+The install script supports macOS, Linux, and Windows (via Git Bash/WSL). It requires `curl` and standard Unix utilities.
+</Note>
+
+### Install Script Options
+
+The install script supports several options for customization:
+
+```bash
+# Install a specific version
+curl -fsSL https://cli.sentry.dev/install | bash -s -- --version 0.15.0
+
+# Install nightly build (latest development version)
+curl -fsSL https://cli.sentry.dev/install | bash -s -- --version nightly
+
+# Skip modifying shell configuration files
+curl -fsSL https://cli.sentry.dev/install | bash -s -- --no-modify-path
+
+# Skip installing shell completions
+curl -fsSL https://cli.sentry.dev/install | bash -s -- --no-completions
+
+# Custom installation directory
+SENTRY_INSTALL_DIR=~/.local/bin curl -fsSL https://cli.sentry.dev/install | bash
+```
+
+### What the Install Script Does
+
+<Steps>
+  <Step title="Platform Detection">
+    Detects your operating system and CPU architecture (x64 or ARM64).
+  </Step>
+  
+  <Step title="Binary Download">
+    Downloads the appropriate native binary from GitHub Releases (for stable versions) or GHCR (for nightly builds). The script attempts to download gzip-compressed binaries first (~60% smaller) before falling back to uncompressed versions.
+  </Step>
+  
+  <Step title="Installation & Setup">
+    Delegates to the binary's built-in `sentry cli setup --install` command, which:
+    - Installs the binary to an appropriate directory (`~/.sentry/bin` or custom location)
+    - Updates your shell configuration files (`.bashrc`, `.zshrc`, etc.) to add the binary to your PATH
+    - Installs shell completions for Bash, Zsh, and Fish
+    - Displays a welcome message with next steps
+  </Step>
+</Steps>
+
+### Error Reporting
+
+The install script includes automatic error reporting to help improve installation reliability. Errors are sent to Sentry using a write-only DSN.
+
+<Note>
+Opt out of telemetry by setting `SENTRY_CLI_NO_TELEMETRY=1` before running the install script.
+</Note>
+
+## Homebrew
+
+For macOS users, Homebrew provides an easy installation method:
+
+```bash
+brew install getsentry/tools/sentry
+```
+
+Homebrew automatically:
+- Installs the binary to your Homebrew bin directory
+- Adds it to your PATH
+- Manages updates with `brew upgrade`
+
+### Updating via Homebrew
+
+```bash
+brew upgrade sentry
+```
+
+## Package Managers
+
+Sentry CLI is available on npm and compatible package managers. This is ideal for Node.js projects or when you want to pin a specific version in your project's dependencies.
+
+<CodeGroup>
+
+```bash npm
+npm install -g sentry
+```
+
+```bash pnpm
+pnpm add -g sentry
+```
+
+```bash bun
+bun add -g sentry
+```
+
+```bash yarn
+yarn global add sentry
+```
+
+</CodeGroup>
+
+<Note>
+Package manager installations require Node.js 22 or higher. The npm package includes the bundled CLI code that runs on Node.js.
+</Note>
+
+### Project-Local Installation
+
+You can also install Sentry CLI as a project dependency:
+
+<CodeGroup>
+
+```bash npm
+npm install --save-dev sentry
+```
+
+```bash pnpm
+pnpm add -D sentry
+```
+
+```bash bun
+bun add -d sentry
+```
+
+</CodeGroup>
+
+Then run it via npm scripts or npx:
+
+```json package.json
+{
+  "scripts": {
+    "sentry": "sentry"
+  }
+}
+```
+
+```bash
+npm run sentry -- issue list
+```
+
+## Run Without Installing
+
+Use `npx` to run Sentry CLI without installing it globally. This is useful for one-off commands or testing:
+
+```bash
+npx sentry@latest auth login
+npx sentry@latest issue list
+npx sentry@latest issue explain PROJ-ABC
+```
+
+<Note>
+`npx` downloads and caches the package on first run, so subsequent commands are faster.
+</Note>
+
+## Platform Support
+
+Sentry CLI provides native binaries for the following platforms:
+
+| Operating System | Architecture | Install Script | Homebrew | npm/npx |
+|-----------------|--------------|----------------|----------|----------|
+| macOS           | x64 (Intel)  | ✅             | ✅       | ✅       |
+| macOS           | ARM64 (M1+)  | ✅             | ✅       | ✅       |
+| Linux           | x64          | ✅             | ❌       | ✅       |
+| Linux           | ARM64        | ✅             | ❌       | ✅       |
+| Windows         | x64          | ✅*            | ❌       | ✅       |
+
+<Note>
+*Windows support via Git Bash, WSL, or MSYS2.
+</Note>
+
+## Nightly Builds
+
+Nightly builds contain the latest features and fixes but may be less stable than official releases. They're distributed via GitHub Container Registry (GHCR).
+
+### Installing Nightly Builds
+
+```bash
+# Via install script
+curl -fsSL https://cli.sentry.dev/install | bash -s -- --version nightly
+
+# Via package managers
+npm install -g sentry@nightly
+pnpm add -g sentry@nightly
+bun add -g sentry@nightly
+```
+
+<Note>
+Nightly builds use versioned tags (`:nightly-<version>`) on GHCR to support delta upgrades, which download only the changes between versions (~50KB vs ~29MB full download).
+</Note>
+
+## Verifying Installation
+
+After installation, verify that Sentry CLI is available:
+
+```bash
+sentry --version
+```
+
+You should see output like:
+
+```
+sentry 0.15.0
+```
+
+## Upgrading
+
+To upgrade to the latest version:
+
+<CodeGroup>
+
+```bash Install Script
+sentry cli upgrade
+```
+
+```bash Homebrew
+brew upgrade sentry
+```
+
+```bash npm
+npm update -g sentry
+```
+
+```bash pnpm
+pnpm update -g sentry
+```
+
+```bash bun
+bun update -g sentry
+```
+
+</CodeGroup>
+
+<Note>
+The `sentry cli upgrade` command remembers your installation method and upgrade channel (stable or nightly) for seamless updates.
+</Note>
+
+## Uninstalling
+
+To remove Sentry CLI from your system:
+
+<CodeGroup>
+
+```bash Install Script
+rm -rf ~/.sentry
+# Then remove the PATH entry from your shell config
+```
+
+```bash Homebrew
+brew uninstall sentry
+```
+
+```bash npm
+npm uninstall -g sentry
+```
+
+```bash pnpm
+pnpm remove -g sentry
+```
+
+```bash bun
+bun remove -g sentry
+```
+
+</CodeGroup>
+
+## Configuration Directory
+
+Sentry CLI stores authentication tokens, cached data, and configuration in `~/.sentry/`:
+
+```
+~/.sentry/
+├── bin/           # Binary (install script method)
+├── config.db      # SQLite database (auth, cache, settings)
+└── config.db-wal  # SQLite write-ahead log
+```
+
+The database file has restricted permissions (mode 600) to protect your authentication tokens.
+
+<Note>
+You can override the config directory by setting `SENTRY_CONFIG_DIR` environment variable.
+</Note>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Learn how to authenticate and run your first commands
+  </Card>
+  
+  <Card title="Commands" icon="terminal" href="/commands/auth/login">
+    Explore all available commands and their options
+  </Card>
+</CardGroup>

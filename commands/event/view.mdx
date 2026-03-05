@@ -1,0 +1,108 @@
+---
+title: sentry event view
+description: View detailed information about a Sentry event
+---
+
+## Usage
+
+```bash
+sentry event view [<org>/<project>] <event-id>
+```
+
+View detailed information about a Sentry event by its ID.
+
+## Target Specification
+
+```bash
+sentry event view <event-id>              # auto-detect from DSN or config
+sentry event view <org>/<proj> <event-id> # explicit org and project
+sentry event view <project> <event-id>    # find project across all orgs
+```
+
+You can also pass a Sentry event URL:
+
+```bash
+sentry event view https://sentry.example.com/organizations/my-org/issues/123/events/abc/
+```
+
+## Flags
+
+<ParamField path="--json" type="boolean" default="false">
+  Output event data as JSON
+</ParamField>
+
+<ParamField path="--web" type="boolean" default="false">
+  Open the event in your web browser instead of displaying in terminal
+  
+  **Alias:** `-w`
+</ParamField>
+
+<ParamField path="--spans" type="number" default="10">
+  Number of spans to include in the output. Set to 0 or "no" to disable span tree display.
+  
+  When enabled, shows a hierarchical trace tree of spans associated with the event.
+</ParamField>
+
+## Examples
+
+### View an event (auto-detect context)
+
+```bash
+sentry event view abc123def456
+```
+
+### View event with explicit org/project
+
+```bash
+sentry event view my-org/my-project abc123def456
+```
+
+### View event from URL
+
+```bash
+sentry event view https://sentry.io/organizations/my-org/issues/123/events/abc123/
+```
+
+### Open event in browser
+
+```bash
+sentry event view abc123def456 --web
+```
+
+### View event with more spans
+
+```bash
+sentry event view abc123def456 --spans 50
+```
+
+### View event without span tree
+
+```bash
+sentry event view abc123def456 --spans 0
+```
+
+### Output as JSON
+
+```bash
+sentry event view abc123def456 --json
+```
+
+## Output
+
+### Human-readable format
+
+Displays:
+- Event ID and timestamp
+- Platform, environment, and release information
+- Error message and type
+- Tags
+- User context (if available)
+- Span tree (if `--spans` is enabled)
+
+### JSON format
+
+Returns the complete event object including:
+- `event` - Full event data from Sentry API
+- `trace` - Trace and span data (if `--spans` > 0)
+  - `traceId` - Associated trace ID
+  - `spans` - Array of span objects

@@ -1,0 +1,71 @@
+---
+title: sentry auth logout
+description: Log out of Sentry and remove stored authentication credentials
+---
+
+Remove stored authentication credentials from the configuration file.
+
+## Usage
+
+```bash
+sentry auth logout
+```
+
+## Description
+
+Log out of Sentry by clearing stored authentication credentials from your local configuration file. This command removes OAuth tokens and related session data.
+
+<Note>
+  If authentication is provided via environment variable (`SENTRY_AUTH_TOKEN` or `SENTRY_TOKEN`), you'll need to unset the environment variable to log out. The command will inform you which variable to unset.
+</Note>
+
+## Options
+
+This command has no flags.
+
+## Examples
+
+### Log out
+
+```bash
+sentry auth logout
+```
+
+Expected output:
+```
+✓ Logged out successfully.
+  Credentials removed from: ~/.sentry/config.db
+```
+
+### Logout when not authenticated
+
+```bash
+sentry auth logout
+```
+
+Expected output:
+```
+Not currently authenticated.
+```
+
+### Logout with environment variable active
+
+```bash
+SENTRY_AUTH_TOKEN=sntrys_xxx sentry auth logout
+```
+
+Expected output:
+```
+Authentication is provided via SENTRY_AUTH_TOKEN environment variable.
+Unset SENTRY_AUTH_TOKEN to log out.
+```
+
+<Tip>
+  After logging out, you can log in again with a different account or authentication method using [`sentry auth login`](/commands/auth/login).
+</Tip>
+
+## Related Commands
+
+- [`sentry auth login`](/commands/auth/login) - Authenticate with Sentry
+- [`sentry auth status`](/commands/auth/status) - View authentication status
+- [`sentry auth whoami`](/commands/auth/whoami) - Show the currently authenticated user

@@ -1,0 +1,90 @@
+---
+title: sentry org list
+description: List organizations that you have access to
+---
+
+List all Sentry organizations that you have access to.
+
+## Usage
+
+```bash
+sentry org list [flags]
+```
+
+## Flags
+
+### `--limit`
+
+**Alias:** `-n`
+
+Maximum number of organizations to show.
+
+- **Default:** `25`
+- **Example:** `sentry org list --limit 10`
+
+### `--json`
+
+Output results as JSON instead of a human-readable table.
+
+- **Example:** `sentry org list --json`
+
+## Output
+
+### Table Format (Default)
+
+Displays organizations in a table with columns:
+
+- **SLUG** - Organization slug (identifier)
+- **REGION** (conditional) - Region name (US, EU, etc.) - only shown if you have orgs in multiple regions
+- **NAME** - Organization display name
+
+### JSON Format
+
+With `--json`, outputs an array of organization objects. Each object includes:
+
+- `id` - Organization ID
+- `slug` - Organization slug
+- `name` - Organization name
+- `status` - Organization status
+- Additional API fields
+
+## Multi-Region Support
+
+If you have access to organizations in multiple Sentry regions (e.g., US and EU), the table automatically includes a REGION column showing the region for each organization:
+
+- **US** - US region (sentry.io, us.sentry.io)
+- **EU** - EU region (de.sentry.io)
+- Other regions shown in uppercase (e.g., EAST-1.US)
+
+## Examples
+
+### List all organizations
+
+```bash
+sentry org list
+```
+
+### Limit results
+
+```bash
+sentry org list --limit 5
+```
+
+### Get JSON output for scripting
+
+```bash
+sentry org list --json | jq '.[] | {slug, name}'
+```
+
+### List with explicit limit
+
+```bash
+sentry org list -n 100
+```
+
+## Notes
+
+- The REGION column is only displayed when you have organizations in multiple regions
+- Region names are derived from the Sentry API base URL (cached locally)
+- Organizations are listed in the order returned by the Sentry API
+- If more organizations exist than the limit, a message indicates how many are shown

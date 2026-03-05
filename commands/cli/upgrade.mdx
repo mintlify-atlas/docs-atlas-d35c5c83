@@ -1,0 +1,263 @@
+---
+title: sentry cli upgrade
+description: Update Sentry CLI to the latest or a specific version
+---
+
+# sentry cli upgrade
+
+Self-update the Sentry CLI to the latest or a specific version. After upgrading, automatically runs `cli setup` to update completions, agent skills, and installation metadata.
+
+## Usage
+
+```bash
+sentry cli upgrade [version] [flags]
+```
+
+## Arguments
+
+- **version** (optional) - Specific version (e.g., `0.5.0`), or `"nightly"`/`"stable"` to switch channel. Omit to update within current channel.
+
+## Release Channels
+
+Two release channels are supported:
+
+- **stable** (default) - Latest stable release from GitHub Releases
+- **nightly** - Built from main, updated on every commit (standalone binary only)
+
+The channel is persisted locally so that subsequent bare `sentry cli upgrade` calls use the same channel.
+
+### Switching Channels
+
+```bash
+sentry cli upgrade nightly  # Switch to nightly and update
+sentry cli upgrade stable   # Switch back to stable and update
+```
+
+## Flags
+
+- `--check` - Check for updates without installing
+- `--force` - Force upgrade even if already on the latest version
+- `--method <method>` - Override installation method (`curl`, `brew`, `npm`, `pnpm`, `bun`, `yarn`)
+
+## Installation Methods
+
+The upgrade command automatically detects how the CLI was installed and uses the same method:
+
+| Method | Description |
+|--------|-------------|
+| `curl` | Standalone binary (downloaded directly) |
+| `brew` | Homebrew package |
+| `npm` | npm global package |
+| `pnpm` | pnpm global package |
+| `bun` | Bun global package |
+| `yarn` | Yarn global package |
+
+**Note:** The `--method` flag is recorded by `sentry cli setup` during installation.
+
+## Examples
+
+### Update to Latest (Current Channel)
+
+```bash
+sentry cli upgrade
+```
+
+Uses the persisted channel (stable by default, or nightly if you switched).
+
+### Switch to Nightly Channel
+
+```bash
+sentry cli upgrade nightly
+```
+
+Switches to the nightly channel and installs the latest nightly build. The channel preference is persisted.
+
+### Switch Back to Stable
+
+```bash
+sentry cli upgrade stable
+```
+
+Switches back to the stable channel and installs the latest stable release.
+
+### Install Specific Stable Version
+
+```bash
+sentry cli upgrade 0.5.0
+```
+
+Installs version 0.5.0 from the stable channel.
+
+### Install Specific Nightly Version
+
+```bash
+sentry cli upgrade nightly
+sentry cli upgrade 0.5.0-nightly.20260305
+```
+
+First switches to nightly channel, then installs a specific nightly build.
+
+### Check for Updates
+
+```bash
+sentry cli upgrade --check
+```
+
+Checks for updates without installing. Shows current and latest versions.
+
+### Force Reinstall
+
+```bash
+sentry cli upgrade --force
+```
+
+Force re-download even if already on the latest version (useful for repairing corrupted installations).
+
+### Override Installation Method
+
+```bash
+sentry cli upgrade --method npm
+```
+
+Forces using npm to upgrade, regardless of detected installation method.
+
+## Nightly Channel Notes
+
+### Standalone Binary Only
+
+Nightly builds are distributed as standalone binaries only (GitHub release assets). When a user on `brew`/`npm`/`pnpm`/`bun`/`yarn` switches to nightly:
+
+1. The nightly binary is downloaded to a temp path
+2. Installed to `~/.local/bin` (or `$SENTRY_INSTALL_DIR`)
+3. Setup runs to update completions, PATH, and metadata
+4. A warning is displayed about the old package-manager installation that may still be in PATH
+
+### Migration Example
+
+```bash
+$ sentry cli upgrade nightly
+
+Installation method: npm
+Current version: 0.5.0
+Channel: nightly
+Latest version: 0.5.0-nightly.20260305
+
+Upgrading to 0.5.0-nightly.20260305...
+
+Nightly builds are only available as standalone binaries.
+Migrating to standalone installation...
+
+Binary: Installed to /Users/you/.local/bin/sentry
+PATH: /Users/you/.local/bin is already in PATH
+Completions: Installed to /Users/you/.zsh/completions/_sentry
+
+Successfully installed nightly 0.5.0-nightly.20260305.
+
+Note: your npm-installed sentry may still appear earlier in PATH.
+      Consider removing it: npm uninstall -g sentry
+```
+
+## Homebrew Limitations
+
+Homebrew manages versioning through the formula. Pinning a specific stable version is not supported:
+
+```bash
+$ sentry cli upgrade 0.4.0
+Error: Homebrew does not support installing a specific version. 
+Run 'brew upgrade getsentry/tools/sentry' to upgrade to the latest formula version.
+```
+
+To upgrade with Homebrew:
+
+```bash
+brew upgrade getsentry/tools/sentry
+```
+
+Note: Homebrew's post-install hook automatically runs `sentry cli setup`, so completions and metadata are updated automatically.
+
+## Version Resolution
+
+### Channel Selection Priority
+
+1. Positional argument (`nightly` or `stable`) overrides persisted channel
+2. Persisted channel (set by previous `sentry cli upgrade nightly/stable`)
+3. Default: `stable`
+
+### Version Selection
+
+- **No version argument** - Latest in current channel
+- **`nightly` or `stable`** - Latest in that channel (switches channel)
+- **Specific version (e.g., `0.5.0`)** - That exact version in current channel
+
+## Post-Upgrade Setup
+
+After upgrading, the command automatically spawns the new binary with `cli setup` to:
+
+1. Update shell completions with new commands/flags
+2. Update agent skills with new version reference
+3. Record installation metadata (version, method, channel)
+
+**Note:** PATH modification is skipped during upgrade (only needed on fresh install).
+
+## Downgrading
+
+To downgrade to an older version:
+
+```bash
+sentry cli upgrade 0.4.0
+```
+
+The command detects downgrades and adjusts messaging accordingly:
+
+```bash
+Downgrading to 0.4.0...
+
+Successfully downgraded to 0.4.0.
+```
+
+## Exit Codes
+
+- `0` - Success
+- `1` - Upgrade failed (network error, invalid version, etc.)
+
+## Environment Variables
+
+### Read by Upgrade
+
+- `HOME` - User home directory (determines install location)
+- `SENTRY_INSTALL_DIR` - Override install directory for standalone binaries
+
+### Set During Upgrade (Internal)
+
+- `SENTRY_INSTALL_DIR` - Pinned install directory passed to child `setup` process
+
+## Error Messages
+
+### Unknown Installation Method
+
+```bash
+Error: Cannot detect installation method. Use --method to specify.
+```
+
+Solution: Run `sentry cli setup --method <method>` to record how you installed the CLI.
+
+### Version Not Found
+
+```bash
+Error: Version 0.99.0 not found
+```
+
+Solution: Check available versions at https://github.com/getsentry/sentry-cli/releases
+
+### Network Error
+
+```bash
+Error: Failed to fetch version info (network error)
+```
+
+Solution: Check your internet connection and try again.
+
+## Related Commands
+
+- [`sentry cli setup`](/commands/cli/setup) - Configure shell integration
+- [`sentry --version`](/commands/) - Show current version

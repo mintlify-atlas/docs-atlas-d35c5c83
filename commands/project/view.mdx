@@ -1,0 +1,131 @@
+---
+title: sentry project view
+description: View detailed information about Sentry projects
+---
+
+View detailed information about a Sentry project, including its configuration, platform, and DSN.
+
+## Usage
+
+```bash
+sentry project view [target] [flags]
+```
+
+## Target Patterns
+
+The command supports multiple targeting modes:
+
+- **Auto-detect** (no argument): Detect from DSN or config defaults
+- **Explicit target** (`<org>/<project>`): View a specific project
+- **Cross-org search** (`<project>`): Find a project across all accessible orgs
+
+### Examples
+
+```bash
+# Auto-detect from DSN or config
+sentry project view
+
+# View a specific project
+sentry project view sentry/sentry
+
+# Search for a project across all orgs
+sentry project view my-app
+```
+
+## Flags
+
+### `--json`
+
+Output results as JSON instead of human-readable format.
+
+- **Example:** `sentry project view --json`
+
+### `--web`
+
+**Alias:** `-w`
+
+Open the project in your browser instead of displaying details in the terminal.
+
+- **Example:** `sentry project view sentry/sentry -w`
+
+## Output
+
+### Human-Readable Format (Default)
+
+Displays project details including:
+
+- **Organization** - Organization slug
+- **Project** - Project slug
+- **Name** - Project display name
+- **ID** - Project ID
+- **Platform** - Project platform
+- **Status** - Project status (active, disabled, etc.)
+- **DSN** - Primary DSN (if available)
+- **Created** - Creation timestamp
+
+If the project was auto-detected, shows the detection source (e.g., "Detected from: .env").
+
+### JSON Format
+
+With `--json`, outputs the complete project object including:
+
+- `id` - Project ID
+- `slug` - Project slug
+- `name` - Project name
+- `platform` - Platform identifier
+- `status` - Project status
+- `dsn` - Primary DSN (null if unavailable)
+- Additional API fields
+
+For single projects, outputs the project object directly. For multiple projects (monorepo), outputs an array.
+
+## Monorepo Support
+
+In monorepos with multiple Sentry projects, the command detects and displays all projects:
+
+```bash
+sentry project view
+```
+
+Output shows each project's details separated by dividers, with the detection source for each.
+
+## Examples
+
+### View project details
+
+```bash
+sentry project view acme-corp/frontend
+```
+
+### Auto-detect project from current directory
+
+```bash
+# Detects project from DSN in .env or source code
+sentry project view
+```
+
+### Open project in browser
+
+```bash
+sentry project view sentry/sentry --web
+```
+
+### Get JSON for scripting
+
+```bash
+sentry project view sentry/sentry --json | jq '.dsn'
+```
+
+### Search across organizations
+
+```bash
+# Finds 'my-app' in any accessible organization
+sentry project view my-app
+```
+
+## Notes
+
+- Auto-detect mode supports monorepo configurations with multiple Sentry projects
+- The DSN is fetched best-effort; if unavailable, the field will be null
+- When using `--web` with multiple detected projects, you must specify which project to open
+- Project search (bare slug) will prompt if the project exists in multiple organizations

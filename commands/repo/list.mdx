@@ -1,0 +1,117 @@
+---
+title: sentry repo list
+description: List repositories connected to a Sentry organization
+---
+
+## Usage
+
+```bash
+sentry repo list [target]
+```
+
+List repositories connected to an organization, with flexible targeting and cursor pagination.
+
+## Target Specification
+
+```bash
+sentry repo list               # auto-detect from DSN or config
+sentry repo list <org>/        # list all repos in org (paginated)
+sentry repo list <org>/<proj>  # list repos in org (project context)
+sentry repo list <org>         # list repos in org
+```
+
+## Flags
+
+<ParamField path="--limit" type="number" default="100">
+  Maximum number of repositories to retrieve per page
+  
+  **Alias:** `-n`
+</ParamField>
+
+<ParamField path="--cursor" type="string">
+  Pagination cursor. Use `last` to continue from the last page.
+  
+  Only applicable when using org-scoped listing (e.g., `<org>/`). The cursor is automatically saved between invocations.
+  
+  **Alias:** `-c`
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Output as JSON
+</ParamField>
+
+## Examples
+
+### List repositories (auto-detect)
+
+```bash
+sentry repo list
+```
+
+### List repositories in specific org (paginated)
+
+```bash
+sentry repo list my-org/
+```
+
+### List repositories with project context
+
+```bash
+sentry repo list my-org/my-project
+```
+
+### Continue to next page
+
+```bash
+sentry repo list my-org/ -c last
+```
+
+### Show more repositories per page
+
+```bash
+sentry repo list my-org/ --limit 200
+```
+
+### Output as JSON
+
+```bash
+sentry repo list --json
+```
+
+## Output
+
+### Human-readable format
+
+Displays a table with:
+- ORG - Organization slug
+- NAME - Repository name
+- PROVIDER - Source control provider (GitHub, GitLab, etc.)
+- STATUS - Repository integration status
+- URL - Repository URL
+
+### JSON format
+
+Returns an array of repository objects, each containing:
+- `name` - Repository name
+- `provider` - Object with provider details
+  - `name` - Provider name (e.g., "github")
+- `status` - Integration status
+- `url` - Repository URL
+- `orgSlug` - Organization slug (when listing across orgs)
+- Additional fields from the Sentry API
+
+## Modes
+
+The command supports different resolution modes:
+
+- **Auto-detect**: Uses DSN from source code or config
+- **Org-all** (`<org>/`): Lists all repositories with cursor pagination
+- **Explicit** (`<org>/<project>`): Lists repositories for the org (project provides context)
+- **Project search** (`<project>`): Finds project across all orgs, lists repositories for that org
+
+## Notes
+
+- Cursor pagination is only available in org-scoped mode (`<org>/`)
+- When using project context, repositories are listed for the project's parent organization
+- The cursor is automatically persisted between invocations
+- Repositories must be configured in Sentry organization settings to appear in this list
