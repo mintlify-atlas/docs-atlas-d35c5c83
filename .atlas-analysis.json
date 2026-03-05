@@ -1,0 +1,161 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "Sentry CLI",
+  "projectDescription": "A command-line interface for Sentry with AI-powered debugging, DSN auto-detection, and monorepo support.",
+  "theme": "aspen",
+  "primaryColor": "#7533a7",
+  "lightColor": "#bd8dd2",
+  "darkColor": "#e1d1eb",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/authentication",
+              "concepts/dsn-detection",
+              "concepts/project-resolution",
+              "concepts/monorepo-support"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/ai-debugging",
+              "guides/json-output",
+              "guides/self-hosted",
+              "guides/configuration"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Command Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "commands/auth/login",
+              "commands/auth/logout",
+              "commands/auth/status",
+              "commands/auth/whoami"
+            ]
+          },
+          {
+            "group": "Issues",
+            "pages": [
+              "commands/issue/list",
+              "commands/issue/view",
+              "commands/issue/explain",
+              "commands/issue/plan"
+            ]
+          },
+          {
+            "group": "Projects",
+            "pages": [
+              "commands/project/list",
+              "commands/project/view",
+              "commands/project/create"
+            ]
+          },
+          {
+            "group": "Organizations",
+            "pages": [
+              "commands/org/list",
+              "commands/org/view"
+            ]
+          },
+          {
+            "group": "Events & Traces",
+            "pages": [
+              "commands/event/view",
+              "commands/trace/list",
+              "commands/trace/logs"
+            ]
+          },
+          {
+            "group": "Teams & Repos",
+            "pages": [
+              "commands/team/list",
+              "commands/repo/list"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "commands/api",
+              "commands/cli/setup",
+              "commands/cli/upgrade",
+              "commands/cli/feedback"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Advanced",
+        "groups": [
+          {
+            "group": "Integrations",
+            "pages": [
+              "advanced/ci-cd",
+              "advanced/scripting",
+              "advanced/ai-agents"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "advanced/configuration-file",
+              "advanced/environment-variables",
+              "advanced/troubleshooting"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "DSN auto-detection from environment files and source code",
+    "AI-powered root cause analysis and fix plans via Seer",
+    "OAuth device flow authentication",
+    "Monorepo support with automatic project alias generation",
+    "Multi-region Sentry API support",
+    "JSON output for scripting and automation",
+    "SQLite-based caching for fast API responses",
+    "Direct API access with automatic authentication"
+  ],
+  "publicApiSurface": [
+    "sentry auth login",
+    "sentry auth logout",
+    "sentry auth status",
+    "sentry auth whoami",
+    "sentry issue list",
+    "sentry issue view <issue-id>",
+    "sentry issue explain <issue-id>",
+    "sentry issue plan <issue-id>",
+    "sentry project list",
+    "sentry project view <project>",
+    "sentry project create",
+    "sentry org list",
+    "sentry org view <org>",
+    "sentry event view <event-id>",
+    "sentry trace list",
+    "sentry trace logs",
+    "sentry team list",
+    "sentry repo list",
+    "sentry api <method> <endpoint>",
+    "sentry cli setup",
+    "sentry cli upgrade",
+    "sentry cli feedback"
+  ]
+}
