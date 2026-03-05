@@ -1,0 +1,216 @@
+---
+title: sentry trace view
+description: View detailed information about a distributed trace
+---
+
+# sentry trace view
+
+View detailed information about a distributed trace by its ID, including a hierarchical span tree.
+
+## Usage
+
+```bash
+sentry trace view [<org>/<project>] <trace-id>
+```
+
+## Target Specification
+
+```bash
+sentry trace view <trace-id>              # auto-detect from DSN or config
+sentry trace view <org>/<proj> <trace-id> # explicit org and project
+sentry trace view <project> <trace-id>    # find project across all orgs
+```
+
+The trace ID is the 32-character hexadecimal identifier.
+
+## Arguments
+
+<ParamField path="trace-id" type="string" required>
+  32-character hexadecimal trace identifier
+  
+  **Example:**
+  ```bash
+  sentry trace view abc123def456abc123def456abc123de
+  ```
+</ParamField>
+
+<ParamField path="target" type="string">
+  Optional target in format `<org>/<project>` or `<project>` (searches across orgs)
+  
+  If not provided, auto-detects from DSN in working directory or config defaults.
+</ParamField>
+
+## Flags
+
+<ParamField path="--json" type="boolean" default="false">
+  Output trace data as JSON including summary and spans
+  
+  **Example:**
+  ```bash
+  sentry trace view abc123def456abc123def456abc123de --json
+  ```
+</ParamField>
+
+<ParamField path="--web" type="boolean" default="false">
+  Open the trace in your default web browser instead of displaying in terminal
+  
+  **Alias:** `-w`
+  
+  **Example:**
+  ```bash
+  sentry trace view abc123def456abc123def456abc123de -w
+  ```
+</ParamField>
+
+<ParamField path="--spans" type="number" default="10">
+  Maximum depth of span tree to display. Set to `0` or use `--spans no` to disable span tree display.
+  
+  **Example:**
+  ```bash
+  # Show deeper span tree
+  sentry trace view abc123def456abc123def456abc123de --spans 20
+  
+  # Disable span tree
+  sentry trace view abc123def456abc123def456abc123de --spans 0
+  sentry trace view abc123def456abc123def456abc123de --spans no
+  ```
+</ParamField>
+
+## Examples
+
+### View a trace (auto-detect context)
+
+```bash
+sentry trace view abc123def456abc123def456abc123de
+```
+
+### View trace with explicit org/project
+
+```bash
+sentry trace view my-org/my-project abc123def456abc123def456abc123de
+```
+
+### View trace with project slug (searches across orgs)
+
+```bash
+sentry trace view my-project abc123def456abc123def456abc123de
+```
+
+### Open trace in browser
+
+```bash
+sentry trace view abc123def456abc123def456abc123de --web
+sentry trace view abc123def456abc123def456abc123de -w
+```
+
+### View trace with deeper span tree
+
+```bash
+sentry trace view abc123def456abc123def456abc123de --spans 20
+```
+
+### View trace without span tree
+
+```bash
+sentry trace view abc123def456abc123def456abc123de --spans 0
+```
+
+### Output as JSON
+
+```bash
+sentry trace view abc123def456abc123def456abc123de --json
+```
+
+## Sample Output
+
+### Human-Readable Format
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Trace Summary
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Trace ID:        abc123def456abc123def456abc123de
+Duration:        2.4s
+Spans:           45
+Projects:        3 (frontend, backend-api, payment-service)
+Root:            GET /api/checkout
+Timestamp:       2024-03-05 14:23:45 UTC
+Status:          ok
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Span Tree
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▼ http.server GET /api/checkout                           2.4s  [frontend]
+  ├─ db.query SELECT * FROM cart WHERE user_id = ?        45ms  [frontend]
+  ├─ http.client POST /api/payment/process                1.8s  [backend-api]
+  │  ├─ db.query BEGIN TRANSACTION                        12ms  [backend-api]
+  │  ├─ http.client POST /external/stripe/charge          1.5s  [payment-service]
+  │  │  ├─ http.request POST https://api.stripe.com       1.2s  [payment-service]
+  │  │  └─ db.query INSERT INTO transactions              34ms  [payment-service]
+  │  ├─ db.query UPDATE orders SET status = 'paid'        23ms  [backend-api]
+  │  └─ db.query COMMIT                                   18ms  [backend-api]
+  ├─ http.client GET /api/inventory/reserve               120ms [backend-api]
+  └─ cache.set user:123:cart                              8ms   [frontend]
+
+Tip: Open in browser with 'sentry trace view --web abc123def456abc123def456abc123de'
+```
+
+### JSON Format
+
+```json
+{
+  "summary": {
+    "traceId": "abc123def456abc123def456abc123de",
+    "duration": 2.4,
+    "spanCount": 45,
+    "projectCount": 3,
+    "projects": ["frontend", "backend-api", "payment-service"],
+    "rootOperation": "GET /api/checkout",
+    "timestamp": "2024-03-05T14:23:45Z",
+    "status": "ok"
+  },
+  "spans": [
+    {
+      "span_id": "def456abc123def4",
+      "parent_span_id": null,
+      "trace_id": "abc123def456abc123def456abc123de",
+      "op": "http.server",
+      "description": "GET /api/checkout",
+      "start_timestamp": 1709649825.0,
+      "timestamp": 1709649827.4,
+      "status": "ok",
+      "project": "frontend"
+    },
+    {
+      "span_id": "456abc123def456a",
+      "parent_span_id": "def456abc123def4",
+      "trace_id": "abc123def456abc123def456abc123de",
+      "op": "db.query",
+      "description": "SELECT * FROM cart WHERE user_id = ?",
+      "start_timestamp": 1709649825.1,
+      "timestamp": 1709649825.145,
+      "status": "ok",
+      "project": "frontend"
+    }
+  ]
+}
+```
+
+## Notes
+
+- Organization and project context is required to fetch the trace. If not provided explicitly, it's resolved from DSN detection or config defaults.
+- The trace API searches around the current timestamp to locate trace data.
+- Traces are typically retained for 90 days in Sentry.
+- The span tree shows a hierarchical view of all operations across services, helping identify performance bottlenecks.
+- Use `--spans 0` to disable span tree fetching for faster output when you only need trace metadata.
+- The `-w` flag is useful for quickly jumping to the Sentry web UI for interactive trace exploration.
+- Cross-project traces show which services were involved in handling the request.
+
+## See Also
+
+- [sentry trace list](/commands/trace/list) - List traces from projects
+- [sentry trace logs](/commands/trace/logs) - List logs for a specific trace
+- [sentry event view](/commands/event/view) - View event details
+- [sentry log view](/commands/log/view) - View log entry details

@@ -1,0 +1,105 @@
+---
+title: sentry auth token
+description: Print the stored authentication token
+---
+
+Print the stored authentication token to stdout.
+
+## Usage
+
+```bash
+sentry auth token
+```
+
+## Description
+
+Print the stored authentication token to stdout without any formatting. This command is designed for piping to other commands or scripts.
+
+The token is printed without a trailing newline when stdout is not a TTY (e.g., when piped), making it suitable for shell scripting.
+
+<Note>
+  This command outputs the raw, unmasked token. Use with caution and avoid logging or displaying the token in insecure contexts.
+</Note>
+
+## Options
+
+This command has no options.
+
+## Examples
+
+### Print token
+
+```bash
+sentry auth token
+```
+
+Expected output:
+```
+sntrys_eyJpYXQiOjE3MzUwNjQ2MjMsInVybCI6Imh0dHBzOi8vc2VudHJ5LmlvIiwidXNlcl9pZCI6NzM0NTY3LCJyZWdpb24iOiJ1cyJ9Xjw
+```
+
+### Use in shell scripts
+
+Store the token in a variable:
+
+```bash
+TOKEN=$(sentry auth token)
+echo "Token length: ${#TOKEN}"
+```
+
+### Pipe to clipboard
+
+On macOS:
+
+```bash
+sentry auth token | pbcopy
+```
+
+On Linux (with xclip):
+
+```bash
+sentry auth token | xclip -selection clipboard
+```
+
+### Use with curl
+
+```bash
+curl -H "Authorization: Bearer $(sentry auth token)" \
+  https://sentry.io/api/0/organizations/
+```
+
+### Verify token format
+
+```bash
+sentry auth token | grep -o '^sntrys_'
+```
+
+Expected output:
+```
+sntrys_
+```
+
+## Error Cases
+
+### Not authenticated
+
+If no token is stored:
+
+```bash
+sentry auth token
+```
+
+Expected output:
+```
+Error: Not authenticated. Run 'sentry auth login' first.
+```
+
+<Tip>
+  For a safer alternative that masks the token by default, use [`sentry auth status`](/commands/auth/status). Use `sentry auth status --show-token` to see the full token with additional context.
+</Tip>
+
+## Related Commands
+
+- [`sentry auth login`](/commands/auth/login) - Authenticate and store a token
+- [`sentry auth status`](/commands/auth/status) - View authentication status with masked token
+- [`sentry auth logout`](/commands/auth/logout) - Remove the stored token

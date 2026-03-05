@@ -1,0 +1,171 @@
+---
+title: sentry log view
+description: View detailed information about a specific Sentry log entry
+---
+
+# sentry log view
+
+View detailed information about a Sentry log entry by its ID.
+
+## Usage
+
+```bash
+sentry log view [<org>/<project>] <log-id>
+```
+
+## Target Specification
+
+```bash
+sentry log view <log-id>              # auto-detect from DSN or config
+sentry log view <org>/<proj> <log-id> # explicit org and project
+sentry log view <project> <log-id>    # find project across all orgs
+```
+
+The log ID is the 32-character hexadecimal identifier shown in log listings.
+
+## Arguments
+
+<ParamField path="log-id" type="string" required>
+  32-character hexadecimal log entry identifier
+  
+  **Example:**
+  ```bash
+  sentry log view a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+  ```
+</ParamField>
+
+<ParamField path="target" type="string">
+  Optional target in format `<org>/<project>` or `<project>` (searches across orgs)
+  
+  If not provided, auto-detects from DSN in working directory or config defaults.
+</ParamField>
+
+## Flags
+
+<ParamField path="--json" type="boolean" default="false">
+  Output log data as JSON
+  
+  **Example:**
+  ```bash
+  sentry log view a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 --json
+  ```
+</ParamField>
+
+<ParamField path="--web" type="boolean" default="false">
+  Open the log entry in your default web browser instead of displaying in terminal
+  
+  **Alias:** `-w`
+  
+  **Example:**
+  ```bash
+  sentry log view a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 -w
+  ```
+</ParamField>
+
+## Examples
+
+### View a log entry (auto-detect context)
+
+```bash
+sentry log view a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+```
+
+### View log with explicit org/project
+
+```bash
+sentry log view my-org/my-project a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+```
+
+### View log with project slug (searches across orgs)
+
+```bash
+sentry log view my-project a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+```
+
+### Open log in browser
+
+```bash
+sentry log view a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 --web
+sentry log view a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 -w
+```
+
+### Output as JSON
+
+```bash
+sentry log view a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6 --json
+```
+
+## Sample Output
+
+### Human-Readable Format
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Log Entry: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Timestamp:   2024-03-05 14:23:45 UTC
+Severity:    error
+Message:     Database connection timeout after 5000ms
+Project:     my-org/my-project
+
+Trace:       abc123def456abc123def456abc123de
+Span:        def456abc123def456abc123def456ab
+
+Context:
+  operation:     database.query
+  query:         SELECT * FROM users WHERE active = true
+  duration_ms:   5234
+  retry_count:   3
+
+Tags:
+  environment:   production
+  server.name:   web-01
+  region:        us-west-2
+
+Link: https://sentry.io/organizations/my-org/logs/a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6/
+
+Detected from .env.local
+```
+
+### JSON Format
+
+```json
+{
+  "id": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+  "timestamp": "2024-03-05T14:23:45Z",
+  "timestamp_precise": 1709649825000000000,
+  "severity": "error",
+  "message": "Database connection timeout after 5000ms",
+  "trace": "abc123def456abc123def456abc123de",
+  "span": "def456abc123def456abc123def456ab",
+  "context": {
+    "operation": "database.query",
+    "query": "SELECT * FROM users WHERE active = true",
+    "duration_ms": 5234,
+    "retry_count": 3
+  },
+  "tags": {
+    "environment": "production",
+    "server.name": "web-01",
+    "region": "us-west-2"
+  },
+  "project": {
+    "slug": "my-project",
+    "name": "My Project"
+  }
+}
+```
+
+## Notes
+
+- Organization and project context is required. If not provided explicitly, it's resolved from DSN detection or config defaults.
+- Log entries are typically retained for 90 days in Sentry.
+- The `-w` flag is useful for quickly jumping to the Sentry web UI for more context around the log entry.
+- Use `sentry trace view <trace-id>` to see the full trace and span tree associated with this log entry.
+
+## See Also
+
+- [sentry log list](/commands/log/list) - List and stream logs from projects
+- [sentry trace view](/commands/trace/view) - View trace details with span tree
+- [sentry trace logs](/commands/trace/logs) - List logs for a specific trace

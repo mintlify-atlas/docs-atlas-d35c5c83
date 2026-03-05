@@ -1,0 +1,209 @@
+---
+title: sentry log list
+description: List and stream logs from Sentry projects
+---
+
+# sentry log list
+
+List and stream logs from Sentry projects. Supports real-time streaming with the `--follow` flag and filtering by trace ID with the `--trace` flag.
+
+## Usage
+
+```bash
+sentry log list [<org>/<project>]
+```
+
+## Target Patterns
+
+```bash
+sentry log list                   # auto-detect from DSN or config
+sentry log list <org>/<proj>      # explicit org and project
+sentry log list <project>         # find project across all orgs
+```
+
+### Trace Filtering
+
+When `--trace` is provided, only organization resolution is needed (the trace-logs endpoint is org-scoped). The positional target is treated as an org slug, not an org/project pair.
+
+```bash
+sentry log list --trace <trace-id>         # auto-detect org
+sentry log list <org> --trace <trace-id>   # explicit org
+```
+
+## Flags
+
+<ParamField path="--limit" type="number" default="100">
+  Number of log entries to retrieve (1-1000)
+  
+  **Alias:** `-n`
+  
+  **Example:**
+  ```bash
+  sentry log list --limit 50
+  ```
+</ParamField>
+
+<ParamField path="--query" type="string">
+  Filter query using Sentry search syntax
+  
+  **Alias:** `-q`
+  
+  **Example:**
+  ```bash
+  sentry log list -q 'level:error'
+  ```
+</ParamField>
+
+<ParamField path="--follow" type="number">
+  Stream logs in real-time. Optionally specify poll interval in seconds (default: 2s).
+  
+  When enabled, continuously polls for new logs. Press Ctrl+C to stop.
+  
+  **Alias:** `-f`
+  
+  **Example:**
+  ```bash
+  # Stream with default 2s interval
+  sentry log list -f
+  
+  # Stream with 5s interval
+  sentry log list -f 5
+  ```
+</ParamField>
+
+<ParamField path="--trace" type="string">
+  Filter logs by trace ID (32-character hex string)
+  
+  When provided, switches to org-scoped trace-logs endpoint.
+  
+  **Example:**
+  ```bash
+  sentry log list --trace abc123def456abc123def456abc123de
+  ```
+</ParamField>
+
+<ParamField path="--json" type="boolean" default="false">
+  Output as JSON (one log entry per line in single-fetch mode, or array in streaming mode)
+  
+  **Example:**
+  ```bash
+  sentry log list --json
+  ```
+</ParamField>
+
+## Examples
+
+### Basic Usage
+
+```bash
+# List last 100 logs (default)
+sentry log list
+
+# List from specific project
+sentry log list my-org/my-project
+
+# Show last 50 logs
+sentry log list --limit 50
+```
+
+### Streaming Mode
+
+```bash
+# Stream logs with default 2s poll interval
+sentry log list -f
+
+# Stream logs with 5s poll interval
+sentry log list -f 5
+
+# Stream logs from specific project
+sentry log list my-org/my-project -f
+```
+
+### Filtering
+
+```bash
+# Filter to errors only
+sentry log list -q 'level:error'
+
+# Filter by trace ID
+sentry log list --trace abc123def456abc123def456abc123de
+
+# Stream logs for a specific trace
+sentry log list --trace abc123def456abc123def456abc123de -f
+```
+
+### JSON Output
+
+```bash
+# Export logs to JSON
+sentry log list --json > logs.json
+
+# Stream logs as JSON
+sentry log list -f --json
+```
+
+## Sample Output
+
+### Human-Readable Format
+
+```
+┌─────────────────────────┬──────────┬────────────────────────────────────────────────────┬────────────┐
+│ TIMESTAMP               │ SEVERITY │ MESSAGE                                            │ TRACE      │
+├─────────────────────────┼──────────┼────────────────────────────────────────────────────┼────────────┤
+│ 2024-03-05 14:23:45 UTC │ error    │ Database connection timeout                        │ abc123...  │
+│ 2024-03-05 14:23:46 UTC │ warning  │ Slow query detected: SELECT * FROM users           │ abc123...  │
+│ 2024-03-05 14:23:47 UTC │ info     │ Request completed in 234ms                         │ def456...  │
+└─────────────────────────┴──────────┴────────────────────────────────────────────────────┴────────────┘
+
+Showing 100 logs. Use --limit to show more, or -f to follow.
+```
+
+### Streaming Mode
+
+```
+Streaming logs... (poll interval: 2s)
+Press Ctrl+C to stop.
+
+┌─────────────────────────┬──────────┬────────────────────────────────────────────────────┬────────────┐
+│ TIMESTAMP               │ SEVERITY │ MESSAGE                                            │ TRACE      │
+├─────────────────────────┼──────────┼────────────────────────────────────────────────────┼────────────┤
+│ 2024-03-05 14:30:01 UTC │ info     │ New user registration                              │ ghi789...  │
+│ 2024-03-05 14:30:03 UTC │ error    │ Payment processing failed                          │ jkl012...  │
+```
+
+### JSON Format
+
+```json
+[
+  {
+    "timestamp": "2024-03-05T14:23:45Z",
+    "timestamp_precise": 1709649825000000000,
+    "severity": "error",
+    "message": "Database connection timeout",
+    "trace": "abc123def456abc123def456abc123de"
+  },
+  {
+    "timestamp": "2024-03-05T14:23:46Z",
+    "timestamp_precise": 1709649826000000000,
+    "severity": "warning",
+    "message": "Slow query detected: SELECT * FROM users",
+    "trace": "abc123def456abc123def456abc123de"
+  }
+]
+```
+
+## Notes
+
+- By default, logs are displayed in chronological order (oldest first) with the most recent 100 entries
+- The API returns logs newest-first; the CLI automatically reverses them for tail-like behavior
+- In streaming mode, the command polls every 2 seconds by default (configurable with `-f <seconds>`)
+- Press Ctrl+C to stop streaming mode cleanly
+- When using `--trace`, the endpoint searches logs from the last 14 days across all projects in the org
+- Standard (project-scoped) mode shows logs from the last 90 days by default
+- The trace column shows a short suffix of the trace ID; use `--trace` to filter to a specific trace
+
+## See Also
+
+- [sentry log view](/commands/log/view) - View details of a specific log entry
+- [sentry trace logs](/commands/trace/logs) - Alternative command for trace-filtered logs
+- [sentry trace view](/commands/trace/view) - View trace details with span tree

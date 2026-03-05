@@ -64,7 +64,9 @@
             "pages": [
               "commands/auth/login",
               "commands/auth/logout",
+              "commands/auth/refresh",
               "commands/auth/status",
+              "commands/auth/token",
               "commands/auth/whoami"
             ]
           },
@@ -93,10 +95,13 @@
             ]
           },
           {
-            "group": "Events & Traces",
+            "group": "Events, Traces & Logs",
             "pages": [
               "commands/event/view",
+              "commands/log/list",
+              "commands/log/view",
               "commands/trace/list",
+              "commands/trace/view",
               "commands/trace/logs"
             ]
           },
@@ -113,6 +118,7 @@
               "commands/api",
               "commands/cli/setup",
               "commands/cli/upgrade",
+              "commands/cli/fix",
               "commands/cli/feedback"
             ]
           }

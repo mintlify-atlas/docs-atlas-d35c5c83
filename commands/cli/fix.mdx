@@ -1,0 +1,213 @@
+---
+title: sentry cli fix
+description: Diagnose and repair CLI database issues
+---
+
+# sentry cli fix
+
+Diagnose and repair issues with the Sentry CLI's local SQLite database, including schema inconsistencies, file permissions, and ownership problems.
+
+## Usage
+
+```bash
+sentry cli fix [flags]
+```
+
+## What It Does
+
+The `sentry cli fix` command performs a comprehensive health check of the CLI's local database and configuration directory, then repairs any issues it finds. The command:
+
+1. **Checks ownership** - Detects files owned by root (e.g., after `sudo brew install`)
+2. **Checks permissions** - Verifies config directory (0700) and database files (0600) have correct permissions
+3. **Checks schema** - Validates database schema version and structure
+
+All repairs are non-destructive:
+- **Adds** missing tables and columns (never deletes data)
+- **Fixes** file permissions to secure defaults
+- **Transfers** ownership back to the current user when run with sudo
+
+## Flags
+
+### Diagnostic Mode
+
+<ParamField path="--dry-run" type="boolean" default="false">
+  Show what would be fixed without making any changes. Useful for previewing issues before repair.
+</ParamField>
+
+## Examples
+
+### Diagnose and Fix Issues
+
+```bash
+sentry cli fix
+```
+
+Checks for all issues and automatically repairs them. Expected output:
+
+```
+Database: ~/.sentry/config.db
+Expected schema version: 5
+
+Found 2 permission issue(s):
+  - directory ~/.sentry: 0755 (expected 0700)
+  - database ~/.sentry/config.db: 0644 (expected 0600)
+
+Repairing permissions...
+  + directory ~/.sentry: 0755 -> 0700
+  + database ~/.sentry/config.db: 0644 -> 0600
+
+No issues found. Database schema and permissions are correct.
+```
+
+### Preview Issues Without Fixing
+
+```bash
+sentry cli fix --dry-run
+```
+
+Shows what would be fixed without making changes:
+
+```
+Database: ~/.sentry/config.db
+Expected schema version: 5
+
+Found 2 permission issue(s):
+  - directory ~/.sentry: 0755 (expected 0700)
+  - database ~/.sentry/config.db: 0644 (expected 0600)
+
+Found 1 schema issue(s):
+  - Missing column: dsn_cache.resolved_at
+
+Run 'sentry cli fix' to apply fixes.
+```
+
+### Fix Root-Owned Files
+
+```bash
+sudo sentry cli fix
+```
+
+When files are owned by root (e.g., after running `sudo brew install`), use `sudo` to transfer ownership back to your user:
+
+```
+Database: ~/.sentry/config.db
+Expected schema version: 5
+
+Found 2 ownership issue(s):
+  - directory ~/.sentry: owned by uid 0
+  - database ~/.sentry/config.db: owned by uid 0
+
+Transferring ownership to username (uid 501)...
+  + directory ~/.sentry: transferred to username
+  + database ~/.sentry/config.db: transferred to username
+
+All issues repaired successfully.
+```
+
+## When to Use It
+
+Run `sentry cli fix` when you encounter:
+
+### Schema Upgrades
+
+After upgrading to a new CLI version, the database schema may need migration:
+- Missing tables or columns
+- Outdated schema version
+
+### Permission Errors
+
+When the CLI reports permission denied errors:
+- EACCES when trying to access the database
+- Permission issues after changing user or system configuration
+
+### Root-Owned Files
+
+After operations that run as root:
+- `sudo brew install sentry-cli`
+- Manual file operations with sudo
+- System-wide installations
+
+## What It Checks
+
+### Schema Version
+
+- Verifies database is at the current schema version
+- Detects missing tables (e.g., `auth`, `regions`, `dsn_cache`)
+- Detects missing columns in existing tables
+
+### File Permissions
+
+- **Config directory** (`~/.sentry`) - Requires `0700` (owner read/write/execute only)
+- **Database file** (`config.db`) - Requires `0600` (owner read/write only)
+- **Journal files** (`config.db-wal`, `config.db-shm`) - Require `0600`
+
+Exact permission matching ensures your auth tokens and cached data are not accessible to other users on the system.
+
+### File Ownership
+
+- Detects files owned by a different user (typically root)
+- When running as root via `sudo`, checks against the real user's UID (from `SUDO_USER` environment variable)
+- Skips ownership checks on Windows where `process.getuid()` is unavailable
+
+## What It Repairs
+
+### Schema Repairs
+
+- **Adds missing tables** - Creates tables that don't exist in the database
+- **Adds missing columns** - Adds columns to existing tables (with appropriate defaults)
+- **Never deletes data** - Only additive operations are performed
+
+If schema repair fails, the command suggests deleting the database and restarting.
+
+### Permission Repairs
+
+- **Directory first** - Repairs config directory permissions before files (required for file access)
+- **Files in parallel** - Repairs database and journal file permissions simultaneously
+- **Mode changes** - Uses `chmod` to set exact permission bits
+
+Failed permission repairs show suggested manual commands:
+```bash
+chmod 700 ~/.sentry
+chmod 600 ~/.sentry/config.db
+```
+
+### Ownership Repairs
+
+When running as root (via `sudo`):
+- **Transfers ownership** - Uses `chown` to transfer files to the real user
+- **Resolves UID** - Looks up the numeric UID for the target user
+- **Batch transfer** - Repairs all files in parallel
+
+When not running as root:
+- **Shows instructions** - Displays the exact `sudo chown` command to run
+- **Alternative suggested** - Recommends running `sudo sentry cli fix` for automatic repair
+
+## Exit Codes
+
+- **0** - Success (all issues repaired or none found)
+- **1** - Failure (some repairs failed or issues require manual intervention)
+
+## Security Considerations
+
+### Why Strict Permissions Matter
+
+The CLI's local database stores:
+- OAuth access tokens
+- Refresh tokens
+- Cached API responses
+- User identity information
+
+The strict permission requirements (`0700` for directory, `0600` for files) ensure these sensitive files are not readable by other users on your system.
+
+### When to Use Sudo
+
+Only use `sudo sentry cli fix` when:
+- Files are owned by root (the command will detect this and prompt you)
+- Regular `sentry cli fix` reports ownership issues
+
+Never use `sudo` for normal CLI operations - this can cause ownership issues that require `sudo sentry cli fix` to resolve.
+
+## Related Commands
+
+- [`sentry cli setup`](/commands/cli/setup) - Initial CLI configuration
+- [`sentry cli upgrade`](/commands/cli/upgrade) - Upgrade to the latest version

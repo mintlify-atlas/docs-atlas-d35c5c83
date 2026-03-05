@@ -1,0 +1,128 @@
+---
+title: sentry auth refresh
+description: Refresh your authentication token
+---
+
+Manually refresh your authentication token using the stored refresh token.
+
+## Usage
+
+```bash
+sentry auth refresh [options]
+```
+
+## Description
+
+Manually refresh your authentication token using the stored refresh token.
+
+Token refresh normally happens automatically when making API requests. Use this command to force an immediate refresh or to verify the refresh mechanism is working correctly.
+
+<Note>
+  This command only works with OAuth sessions. API tokens and environment variable tokens cannot be refreshed.
+</Note>
+
+## Options
+
+<ParamField path="--json" type="boolean" default="false">
+  Output result as JSON. The JSON format includes `success`, `refreshed`, `message`, `expiresIn`, and `expiresAt` fields.
+</ParamField>
+
+<ParamField path="--force" type="boolean" default="false">
+  Force refresh even if token is still valid. By default, the command only refreshes if the token is expired or about to expire.
+</ParamField>
+
+## Examples
+
+### Basic refresh
+
+```bash
+sentry auth refresh
+```
+
+Expected output:
+```
+✓ Token refreshed successfully. Expires in 59 minutes.
+```
+
+### Force refresh
+
+```bash
+sentry auth refresh --force
+```
+
+Expected output:
+```
+✓ Token refreshed successfully. Expires in 60 minutes.
+```
+
+### Token still valid
+
+If the token doesn't need refreshing:
+
+```bash
+sentry auth refresh
+```
+
+Expected output:
+```
+Token still valid (expires in 45 minutes).
+Use --force to refresh anyway.
+```
+
+### JSON output
+
+```bash
+sentry auth refresh --json
+```
+
+Expected output:
+```json
+{
+  "success": true,
+  "refreshed": true,
+  "message": "Token refreshed successfully",
+  "expiresIn": 3600,
+  "expiresAt": "2026-03-05T12:00:00.000Z"
+}
+```
+
+<Tip>
+  Token refresh happens automatically when you run commands that make API requests, so you rarely need to run this command manually.
+</Tip>
+
+## Limitations
+
+### Environment variable tokens
+
+If you're using `SENTRY_AUTH_TOKEN` or `SENTRY_TOKEN` environment variables:
+
+```bash
+SENTRY_AUTH_TOKEN=sntrys_xxx sentry auth refresh
+```
+
+Expected output:
+```
+Error: Cannot refresh an environment variable token.
+Token refresh is only available for OAuth sessions.
+Update SENTRY_AUTH_TOKEN to change your token.
+```
+
+### Manual API tokens
+
+If you logged in with `sentry auth login --token`:
+
+```bash
+sentry auth refresh
+```
+
+Expected output:
+```
+Error: No refresh token available. You may be using a manual API token.
+Run 'sentry auth login' to authenticate with OAuth and enable auto-refresh.
+```
+
+## Related Commands
+
+- [`sentry auth login`](/commands/auth/login) - Authenticate with Sentry using OAuth
+- [`sentry auth status`](/commands/auth/status) - View token expiration and auto-refresh status
+- [`sentry auth logout`](/commands/auth/logout) - Log out and remove credentials
